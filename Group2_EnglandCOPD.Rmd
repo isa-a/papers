@@ -1,0 +1,2351 @@
+---
+title: "Spatio-Temporal Distribution of COPD Mortality in England"
+author: "By Group 2: CIDs 01818596, XXX, XXX"
+date: "03/04/2020"
+
+output: html_document
+keep_tex: true
+fig_caption: yes
+geometry: margin=1in
+fontsize: 11pt
+
+bibliography: biblio.bib
+
+abstract: "Include your abstract here ...."
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE, fig.path='Figs/',
+                      fig.width=6, fig.height=4)
+```
+
+```{r load_packages, eval=TRUE}
+library(dplyr)        # A package for data manipulation
+library(sf)           # Simple feature for R
+library(spdep)        # Functions and tests for evaluating spatial patterns 
+                      # and autocorrelation
+library(R2OpenBUGS)   # A package for Running OpenBUGS from R
+library(mcmcplots)    # A package for plotting and viewing of MCMC output
+library(coda)         # A package for summarizing and plotting of MCMC output 
+                      # and diagnostic tests
+
+# Packages used for visualization 
+library(RColorBrewer) # A package providing colour palettes for shading maps 
+                      # and other plots
+library(ggplot2)      # A package that implements the grammar of graphics, which is a term used to
+                      # break up graphs into semantic components, such as geometries and layers.
+library(reshape)      # A package to reshape data
+library(viridis)      # A package providing colour palettes 
+library(cowplot)      # Add-on to ggplot. It provides features that help us with creating
+                      # publication-quality figures
+
+# For tables in RMarkdown
+library(knitr)
+library(kableExtra)
+```
+
+
+# 1. Introduction
+
+Chronic obstructive pulmonary disease (COPD), a highly life-threatening lung disease burden particularly among older people worldwide, is characterized by chronic obstruction of lung airflow that interferes with normal breathing and is not fully reversible (@johnson2020spatio). In 2004 the World Health Organization (WHO) estimated there were approximately 64 million COPD patients and 3 million deaths due to COPD (@agusti2010characterisation). The most significant risk factor is long-term tobacco smoking, and additional risk factors include air pollution and occupational exposures (@agusti2010characterisation). In England, COPD as one of respiratory diseases is the third biggest cause of death (@johnson2020spatio). According to NHS, the annual economic burden of COPD in the UK is estimated £1.9 billion (@johnson2020spatio). Therefore, combating the threat of COPD have been the top priority of public health in the UK. The understanding of geographical trend helps policy makers more clearly target vulnerable groups and areas with needs improving the prevention and treatment of COPD.
+
+There have been some studies related to the geographical trends of COPD. @hansell2003validity showed that COPD mortality and GP prescriptions for COPD were higher in urban areas compared rural areas, and northern regions in England. @hacking2011trends, @hansell2003validity, and @wells2008geographical demonstrated that there is a significant difference of morbidity and mortality of COPD between regions over the past 40 years.
+
+In recent years, Bayesian hierarchical framework and models have been commonly and extensively applied in epidemiological studies, which enable us to summarise the spatial and temporal variations of disease risk (@boulieri2016investigating). @nandram2000bayesian used Bayesian analysis and mapping of mortality rates for COPD. @holt2011geographic demonstrated the geographic disparities pattern in COPD hospitalization rate and risk due to regionally shared environmental risk factors. @lipton2006geography also investigated the geographical pattern of COPD mortality rate. @hemming2009framework investigated the factors, including temperature, air-pollution, urbanization, income and education, and gas emission, helping predict COPD hospital admission in the UK by using Bayesian network model.
+
+However, most of previous spatial analysis studies focusing on COPD in England or the UK were limited in terms of time window or study population. This project aims to analyse a large and long-term, representative data in England from the Health and Social Care Information Centre, investigating trends in COPD at the population level across England by using Bayesian hierarchical framework to help understanding geographical and temporal distribution of COPD mortality.
+
+
+# 2. Methods
+
+## 2-1. Outcome measures
+
+Main outcome measure was the spatio-temporal age standardised mortality ratio (SMR) of COPD in England across 323 local unitary authorities (LUAs) between 2001 and 2010.
+
+## 2-2. Data
+
+The number of deaths from COPD in each LUA in each year was obtained from the Health and Social Care Information Centre. Corresponding expected number of deaths from COPD was also used to calculate the crude SMR and for the Baysian modelling.
+
+## 2-3. Statistical Analysis
+
+Firstly, we calculated crude SMRs by simply dividing the observed number of deaths by expected number. We calculated both SMR in each LUA in each year and SMRs over the ten years, and we mapped them.
+
+Secondly, we employed several Bayesian modellings. We tried (1) Spatial model, (2) Spatio-temporal model without space-time interaction nor unstructured temporal variations, (3) Spatio-temporal model without space-time interaction but with unstructured temporal variations, and then (4) Spatio-temporal model with space-time interaction. We compared the fitting of these models by using deviance information criterion (DIC).
+
+In the final model we used a Poisson distribution to model the number of mortality from COPD $O_{it}$, in area $i$ at time $t$. We included a temporal dependence term, which can be modelled using a non-stationary random walk prior: $\xi_{i} \sim \text{N}(\xi_{i-1}, \sigma^2_{\xi})$. We also assumed a space-time interaction, but only type 1 interaction which is between unstructured spatial variations and unstructured temporal variations (@knorr2000bayesian).
+The model specification is as below:
+\[
+\begin{eqnarray}
+O_{it}  & \sim & \text{Poisson}(E_{it}\lambda_{it} )  \\
+\log(\lambda_{it}) & = & \alpha + V_{i} + U_{i} + \xi_{t} + \nu_{it}\\
+V_{i} & \sim & N(0,1/\tau_{v})\\
+{\bf U} & \sim & \hbox{ICAR}({\bf W}, \sigma_u^2)\\
+\xi_{t} & \sim & RW(1)\\
+\nu_{it} & \sim & N(0,1/\tau_{\nu})\\
+\end{eqnarray}
+\]
+
+where $E_{it}$ is an expected number of mortality from COPD in area $i$ at time $t$ adjusted for age, $V_{i}$ is the unstructured spatial variation in area $i$, $U_{i}$ is the structured spatial variation in area $i$ characterized by Intrinsic Conditional Auto-Regressive (ICAR) model, $\xi_{t}$ is structured temporal variation at time $t$, and $\nu_{it}$ is the interaction term in area $i$ at time $t$.
+
+We investigated the spatio-temporal pattern of COPD mortality visually using the map and the temporal trend graph created. We sought whether there is any LUA that had unusual temporal trends by plotting smoothed SMRs over study period and making a table which contains the worst 5 LUAs in terms of crude and smoothed SMRs.
+
+```{r loaddata, include=FALSE}
+copd_mortality <- read.csv("copd_mortality.csv", header=TRUE)
+COPD_Expected <- read.csv("COPD_Expected.csv", header=TRUE)
+England <- st_read("England.shp") %>% st_set_crs("+init=epsg:27700")
+```
+
+```{r white_map, eval=FALSE}
+ggplot() + 
+      geom_sf(data = England, color = "blue", fill = "white") + 
+      coord_sf() +    #axis limits and CRS
+      theme_bw() +    # dark-on-light theme
+      theme(axis.title = element_text(size = 14),
+            axis.text = element_text(size = 12))
+```
+
+```{r crudeSMR, eval=TRUE, echo=FALSE}
+namelistY <- c("Y2001","Y2002","Y2003","Y2004","Y2005",
+               "Y2006","Y2007","Y2008","Y2009","Y2010")
+namelistE <- c("E2001","E2002","E2003","E2004","E2005",
+               "E2006","E2007","E2008","E2009","E2010")
+copd_mortality <- copd_mortality %>%
+  mutate(Y2001to2010 = select(., one_of(namelistY)) %>% rowSums(na.rm = T))
+COPD_Expected <- COPD_Expected %>%
+  mutate(E2001to2010 = select(., one_of(namelistE)) %>% rowSums(na.rm = T))
+COPD_all <- left_join(copd_mortality, COPD_Expected, by = 'code')
+COPD_all <- COPD_all %>% mutate(SMR2001to2010 = Y2001to2010/E2001to2010,
+                                SMR2001 = Y2001/E2001,
+                                SMR2002 = Y2002/E2002,
+                                SMR2003 = Y2003/E2003,
+                                SMR2004 = Y2004/E2004,
+                                SMR2005 = Y2005/E2005,
+                                SMR2006 = Y2006/E2006,
+                                SMR2007 = Y2007/E2007,
+                                SMR2008 = Y2008/E2008,
+                                SMR2009 = Y2009/E2009,
+                                SMR2010 = Y2010/E2010)
+rangeCheck <- rbind(range(COPD_all$SMR2001to2010),
+      range(COPD_all$SMR2001),
+      range(COPD_all$SMR2002),
+      range(COPD_all$SMR2003),
+      range(COPD_all$SMR2004),
+      range(COPD_all$SMR2005),
+      range(COPD_all$SMR2006),
+      range(COPD_all$SMR2007),
+      range(COPD_all$SMR2008),
+      range(COPD_all$SMR2009),
+      range(COPD_all$SMR2010))
+COPD_all$SMR2001to2010cat <-
+  cut(COPD_all$SMR2001to2010,
+      breaks=c(min(COPD_all$SMR2001to2010),
+               0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+               max(COPD_all$SMR2001to2010)),
+      include.lowest = T)
+COPD_all$SMR2001cat <-
+  cut(COPD_all$SMR2001,
+      breaks=c(min(COPD_all$SMR2001),
+               0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+               max(COPD_all$SMR2001)),
+      include.lowest = T)
+COPD_all$SMR2002cat <-
+  cut(COPD_all$SMR2002,
+      breaks=c(min(COPD_all$SMR2002),
+               0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+               max(COPD_all$SMR2002)),
+      include.lowest = T)
+COPD_all$SMR2003cat <-
+  cut(COPD_all$SMR2003,
+      breaks=c(min(COPD_all$SMR2003),
+               0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+               max(COPD_all$SMR2003)),
+      include.lowest = T)
+COPD_all$SMR2004cat <-
+  cut(COPD_all$SMR2004,
+      breaks=c(min(COPD_all$SMR2004),
+               0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+               max(COPD_all$SMR2004)),
+      include.lowest = T)
+COPD_all$SMR2005cat <-
+  cut(COPD_all$SMR2005,
+      breaks=c(min(COPD_all$SMR2005),
+               0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+               max(COPD_all$SMR2005)),
+      include.lowest = T)
+COPD_all$SMR2006cat <-
+  cut(COPD_all$SMR2006,
+      breaks=c(min(COPD_all$SMR2006),
+               0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+               max(COPD_all$SMR2006)),
+      include.lowest = T)
+COPD_all$SMR2007cat <-
+  cut(COPD_all$SMR2007,
+      breaks=c(min(COPD_all$SMR2007),
+               0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+               max(COPD_all$SMR2007)),
+      include.lowest = T)
+COPD_all$SMR2008cat <-
+  cut(COPD_all$SMR2008,
+      breaks=c(min(COPD_all$SMR2008),
+               0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+               max(COPD_all$SMR2008)),
+      include.lowest = T)
+COPD_all$SMR2009cat <-
+  cut(COPD_all$SMR2009,
+      breaks=c(min(COPD_all$SMR2009),
+               0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+               max(COPD_all$SMR2009)),
+      include.lowest = T)
+COPD_all$SMR2010cat <-
+  cut(COPD_all$SMR2010,
+      breaks=c(min(COPD_all$SMR2010),
+               0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+               max(COPD_all$SMR2010)),
+      include.lowest = T)
+
+COPD_all <- COPD_all %>% mutate(SMRcat =
+                                  ifelse(SMR2001cat==levels(COPD_all$SMR2001cat)[1],
+                                         "[min,0.6]",
+                                         ifelse(SMR2001cat==levels(COPD_all$SMR2001cat)[7],
+                                                "(1.6,max]",
+                                                as.character(SMR2001cat))))
+COPD_all$SMRcat <- as.factor(COPD_all$SMRcat)
+levels(COPD_all$SMRcat) <- c("[min,0.6]","(0.6,0.8]","(0.8,1]","(1,1.2]","(1.2,1.4]",
+                             "(1.4,1.6]","(1.6,max]")
+
+map_SMR2001to2010 <-
+  left_join(England,
+            COPD_all[,c("code", "SMR2001to2010", "SMR2001to2010cat")],
+            by = "code")
+map_SMR2001 <-
+  left_join(England,
+            COPD_all[,c("code", "SMR2001", "SMR2001cat")],
+            by = "code")
+map_SMR2002 <-
+  left_join(England,
+            COPD_all[,c("code", "SMR2002", "SMR2002cat")],
+            by = "code")
+map_SMR2003 <-
+  left_join(England,
+            COPD_all[,c("code", "SMR2003", "SMR2003cat")],
+            by = "code")
+map_SMR2004 <-
+  left_join(England,
+            COPD_all[,c("code", "SMR2004", "SMR2004cat")],
+            by = "code")
+map_SMR2005 <-
+  left_join(England,
+            COPD_all[,c("code", "SMR2005", "SMR2005cat")],
+            by = "code")
+map_SMR2006 <-
+  left_join(England,
+            COPD_all[,c("code", "SMR2006", "SMR2006cat")],
+            by = "code")
+map_SMR2007 <-
+  left_join(England,
+            COPD_all[,c("code", "SMR2007", "SMR2007cat")],
+            by = "code")
+map_SMR2008 <-
+  left_join(England,
+            COPD_all[,c("code", "SMR2008", "SMR2008cat")],
+            by = "code")
+map_SMR2009 <-
+  left_join(England,
+            COPD_all[,c("code", "SMR2009", "SMR2009cat")],
+            by = "code")
+map_SMR2010 <-
+  left_join(England,
+            COPD_all[,c("code", "SMR2010", "SMR2010cat")],
+            by = "code")
+
+map_SMRlegend <-
+  left_join(England,
+            COPD_all[,c("code", "SMRcat")],
+            by = "code")
+```
+
+```{r CrudeRankingTable, eval=TRUE, echo=FALSE}
+crudeRank2001 <- 
+  COPD_all[order(COPD_all$SMR2001, decreasing = TRUE),c('name','SMR2001')]
+colnames(crudeRank2001) <- c('LUA2001', 'SMR2001')
+rownames(crudeRank2001) <- NULL  
+crudeRank2002 <- 
+  COPD_all[order(COPD_all$SMR2002, decreasing = TRUE),c('name','SMR2002')]
+colnames(crudeRank2002) <- c('LUA2002', 'SMR2002')
+rownames(crudeRank2002) <- NULL  
+crudeRank2003 <- 
+  COPD_all[order(COPD_all$SMR2003, decreasing = TRUE),c('name','SMR2003')]
+colnames(crudeRank2003) <- c('LUA2003', 'SMR2003')
+rownames(crudeRank2003) <- NULL  
+crudeRank2004 <- 
+  COPD_all[order(COPD_all$SMR2004, decreasing = TRUE),c('name','SMR2004')]
+colnames(crudeRank2004) <- c('LUA2004', 'SMR2004')
+rownames(crudeRank2004) <- NULL  
+crudeRank2005 <- 
+  COPD_all[order(COPD_all$SMR2005, decreasing = TRUE),c('name','SMR2005')]
+colnames(crudeRank2005) <- c('LUA2005', 'SMR2005')
+rownames(crudeRank2005) <- NULL  
+crudeRank2006 <- 
+  COPD_all[order(COPD_all$SMR2006, decreasing = TRUE),c('name','SMR2006')]
+colnames(crudeRank2006) <- c('LUA2006', 'SMR2006')
+rownames(crudeRank2006) <- NULL  
+crudeRank2007 <- 
+  COPD_all[order(COPD_all$SMR2007, decreasing = TRUE),c('name','SMR2007')]
+colnames(crudeRank2007) <- c('LUA2007', 'SMR2007')
+rownames(crudeRank2007) <- NULL  
+crudeRank2008 <- 
+  COPD_all[order(COPD_all$SMR2008, decreasing = TRUE),c('name','SMR2008')]
+colnames(crudeRank2008) <- c('LUA2008', 'SMR2008')
+rownames(crudeRank2008) <- NULL  
+crudeRank2009 <- 
+  COPD_all[order(COPD_all$SMR2009, decreasing = TRUE),c('name','SMR2009')]
+colnames(crudeRank2009) <- c('LUA2009', 'SMR2009')
+rownames(crudeRank2009) <- NULL  
+crudeRank2010 <- 
+  COPD_all[order(COPD_all$SMR2010, decreasing = TRUE),c('name','SMR2010')]
+colnames(crudeRank2010) <- c('LUA2010', 'SMR2010')
+rownames(crudeRank2010) <- NULL  
+crudeRank2001to2010 <- 
+  COPD_all[order(COPD_all$SMR2001to2010, decreasing = TRUE),c('name','SMR2001to2010')]
+colnames(crudeRank2001to2010) <- c('LUA2001to2010', 'SMR2001to2010')
+rownames(crudeRank2001to2010) <- NULL  
+crudeRankTable <- data.frame(data.frame(Rank = 1:323),crudeRank2001,crudeRank2002,
+                             crudeRank2003,crudeRank2004,crudeRank2005,crudeRank2006,
+                             crudeRank2007,crudeRank2008,crudeRank2009,
+                             crudeRank2010,crudeRank2001to2010)
+#write.csv(crudeRankTable, "crudeRankTable.csv")
+
+crudeRankTableRound <- crudeRankTable
+for(i in 1:11){
+  crudeRankTableRound[2*i + 1] <- round(crudeRankTableRound[2*i +1],2)
+}
+```
+
+```{r crudeSMRtrend, eval=TRUE, echo=FALSE}
+Data.smr.plotCrude <- COPD_all[,c(1,27:36)]
+colnames(Data.smr.plotCrude)<-c("code",2001:2010)
+Data.smr.plotCrude <- 
+  melt(Data.smr.plotCrude, measure.vars = c("2001","2002","2003","2004","2005",
+                                       "2006","2007","2008","2009","2010"),
+     variable_name = "year")
+colnames(Data.smr.plotCrude) <- c("code","Year","SMR")
+Rank <- data.frame(Rank = rep(rank((Data.smr.plotCrude %>% filter(Year==2001))$SMR),10))
+Data.smr.plotCrude <- data.frame(Data.smr.plotCrude, Rank)
+
+SMRtrend <- (colSums(copd_mortality[,4:13]) / colSums(COPD_Expected[,2:11]))
+SMRtrend <- data.frame(year = 2001:2010, SMR = SMRtrend)
+```
+
+```{r adjacencyMat, include=FALSE}
+# make sf object into sp
+England_sp <- as(England, "Spatial")
+
+# binary adjacency matrix 
+England_nb <- poly2nb(England_sp, queen=TRUE)
+summary(England_nb)
+
+plot(England_sp)
+plot(England_nb, coordinates(England_sp), pch = ".", add = TRUE, col=4)
+points(coordinates(England_sp)[,1],coordinates(England_sp)[,2],bg="red", pch=21, cex=0.60)
+```
+
+```{r nbList, eval=TRUE}
+nbWB <- nb2WB(nb = England_nb)
+# a list of three components is created: 
+# adj = ID for all the neighbors; weigths = the weight for each neighbour; num: total nb of neighbors across the study region
+```
+
+```{r dataS, eval=TRUE}
+dataS <- list("N" = dim(England)[1],   #nb of areas
+              "O" = COPD_all$Y2001to2010, #observed nb of cases
+              "E" = COPD_all$E2001to2010, #expected nb of cases
+              "adj" = nbWB$adj, "weights" = nbWB$weights, "num" = nbWB$num) 
+```
+
+```{r initS, eval=TRUE}
+initS <- list(
+  list(alpha = 1, prec.u = 10, prec.v=10,
+       U=c(rep(0.1,160),rep(0.2,1),rep(-0.1,162)), 
+       V=rep(0.01,times=323)), # chain 1
+  list(alpha = 2, prec.u = 50, prec.v=50,
+       U=c(rep(0.5,160),rep(1,1),rep(-0.5,162)), 
+       V=rep(0.05,times=323)) # chain 2
+  )
+```
+
+```{r parameterS, eval=TRUE}
+parameterS <- c("overallSMR","SMR","PP","residSMR","sigma2.v","sigma2.u", "U", "V")
+```
+
+```{r MCMCsetS, eval=TRUE}
+ni <- 2500  # nb iterations 
+nt <- 5     # thinning interval
+nb <- 1000  # nb iterations as burn-in 
+nc <- 2     # nb chains
+```
+
+```{r MCMCS, eval=TRUE}
+t0S <- Sys.time()
+modelCOPDS.sim <- bugs(data = dataS, parameters = parameterS, 
+                       inits = initS, 
+                       model.file = "COPD_MODEL_S.txt",
+                       n.chains = nc, n.iter = ni, n.burnin = nb, 
+                       n.thin = nt, debug = FALSE,
+                       working.directory = getwd(), 
+                       codaPkg = FALSE, summary.only = FALSE, 
+                       bugs.seed = 9)
+t1S <- Sys.time()
+```
+
+```{r MCMCtimeS, include=FALSE}
+t1S - t0S
+```
+
+```{r MCMCplotS, include=FALSE}
+mcmcplot(modelCOPDS.sim, c("overallSMR", "SMR","residSMR","sigma2.v", "sigma2.u", "U", "V"), random=3)
+```
+
+```{r rHatS, include=FALSE}
+modelCOPDS.sim$summary[1,"Rhat"]
+range(modelCOPDS.sim$summary[2:324,"Rhat"]) # e.g. Rhat for SMR
+```
+
+```{r sumStatsS, include=FALSE}
+modelCOPDS.sim$summary[, c(1, 2, 3, 7)] # mean, sd, and 95% credible intervals
+```
+
+```{r Data_map_SMR_PP_S, eval=TRUE}
+resSMR_PP_S <- data.frame(code=COPD_all[,1],
+                       resSMR=modelCOPDS.sim$mean$residSMR, 
+                       PP=modelCOPDS.sim$mean$PP)
+
+resSMR_PP_S$resSMRcat <- cut(resSMR_PP_S$resSMR, breaks=c(min(resSMR_PP_S$resSMR), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 
+                  max(resSMR_PP_S$resSMR)),include.lowest = T)
+resSMR_PP_S$PPcat <- cut(resSMR_PP_S$PP, c(0, 0.2, 0.8, 1.00), include.lowest = TRUE)
+
+map_SMR_PP_S <- left_join(England, resSMR_PP_S, by = "code")
+```
+
+```{r DIC_S, eval=TRUE}
+DIC_S <- modelCOPDS.sim$DIC
+```
+
+```{r obsExp4ST, eval=TRUE}
+Observed <- as.matrix(COPD_all[,4:13])
+Expected <- as.matrix(COPD_all[,15:24])
+```
+
+```{r dataST, eval=TRUE}
+dataST <- list("N" = dim(England)[1], # nb of areas
+"T" = 10, # nb of years
+"O" = Observed, # observed nb of cases
+"E" = Expected, # expected nb of cases
+"adj" = nbWB$adj, "weights" = nbWB$weights, 
+"num" = nbWB$num)
+```
+
+```{r initST, eval=TRUE}
+initsST <- list(
+  list(alpha = 1, prec.u = 10, prec.v=10, prec.xi=8,
+       U=c(rep(0.1,160),rep(0.2,1),rep(-0.1,162)), 
+       xi=c(0.1,0.1,0.1,0.1,0.1,-0.1,-0.1,-0.1,-0.1,-0.1),
+       V=rep(0.01, times=323)), # chain 1
+  list(alpha = 2, prec.u = 50, prec.v=50, prec.xi=10,
+       U=c(rep(0.5,160),rep(1,1),rep(-0.5,162)), 
+       xi=c(0.5, 0, 0.2, -0.5, -0.2, 0.5, 0, 0.2, -0.5, -0.2),
+       V=rep(0.05, times=323)) # chain 2
+  )
+```
+
+```{r parametersST, eval=TRUE}
+parametersST <- c("overallSMR", "SMR","residSMRsp", "PPsp", "sigma2.v",
+                  "sigma2.u", "U", "V", "xi","residSMRtm", "sigma2.xi", "PPsmr")
+```
+
+```{r MCMCsetST, eval=TRUE}
+ni <- 2500  # nb iterations 
+nt <- 5    # thinning interval
+nb <- 1000  # nb iterations as burn-in 
+nc <- 2     # nb chains
+```
+
+```{r MCMCST, eval=TRUE}
+t0ST <- Sys.time()
+modelCOPDST.sim <- bugs(data = dataST, parameters = parametersST, 
+                        inits = initsST, 
+                        model.file = "COPD_MODEL_ST.txt",
+                        n.chains = nc, n.iter = ni, n.burnin = nb, 
+                        n.thin = nt, debug = FALSE, 
+                        working.directory = getwd(), 
+                        codaPkg = FALSE, summary.only = FALSE, 
+                        bugs.seed = 9)
+t1ST <- Sys.time()
+```
+
+```{r MCMCtimeST, include=FALSE}
+t1ST - t0ST
+```
+
+```{r MCMCplotST, include=FALSE}
+mcmcplot(modelCOPDST.sim,random = 3)
+```
+
+```{r rHatST, include=FALSE}
+modelCOPDST.sim$summary[1,"Rhat"]
+range(modelCOPDST.sim$summary[2:3231,"Rhat"]) # example
+```
+
+```{r Data_map_resSMRsp_ST, eval=TRUE}
+resSMRsp_ST <- data.frame(code=COPD_all[,1],
+                    resSMR=modelCOPDST.sim$mean$residSMRsp)
+
+resSMRsp_ST$resSMRcat <- cut(resSMRsp_ST$resSMR, breaks=c(min(resSMRsp_ST$resSMR), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 
+                  max(resSMRsp_ST$resSMR)),include.lowest = T)
+
+map_resSMRsp_ST <- left_join(England, resSMRsp_ST, by = "code")
+```
+
+```{r Data_map_SMR_ST, eval=TRUE}
+SMR2001ST <- data.frame(code = COPD_all[,1],
+                      SMR01=modelCOPDST.sim$mean$SMR[,1])
+SMR2002ST <- data.frame(code = COPD_all[,1],
+                      SMR02=modelCOPDST.sim$mean$SMR[,2])
+SMR2003ST <- data.frame(code = COPD_all[,1],
+                      SMR03=modelCOPDST.sim$mean$SMR[,3])
+SMR2004ST <- data.frame(code = COPD_all[,1],
+                      SMR04=modelCOPDST.sim$mean$SMR[,4])
+SMR2005ST <- data.frame(code = COPD_all[,1],
+                      SMR05=modelCOPDST.sim$mean$SMR[,5])
+SMR2006ST <- data.frame(code = COPD_all[,1],
+                      SMR06=modelCOPDST.sim$mean$SMR[,6])
+SMR2007ST <- data.frame(code = COPD_all[,1],
+                      SMR07=modelCOPDST.sim$mean$SMR[,7])
+SMR2008ST <- data.frame(code = COPD_all[,1],
+                      SMR08=modelCOPDST.sim$mean$SMR[,8])
+SMR2009ST <- data.frame(code = COPD_all[,1],
+                      SMR09=modelCOPDST.sim$mean$SMR[,9])
+SMR2010ST <- data.frame(code = COPD_all[,1],
+                      SMR10=modelCOPDST.sim$mean$SMR[,10])
+
+SMR2001ST$SMR01cat <- cut(SMR2001ST$SMR01, breaks=c(min(SMR2001ST$SMR01), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2001ST$SMR01)),include.lowest = T)
+SMR2002ST$SMR02cat <- cut(SMR2002ST$SMR02, breaks=c(min(SMR2002ST$SMR02), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2002ST$SMR02)),include.lowest = T)
+SMR2003ST$SMR03cat <- cut(SMR2003ST$SMR03, breaks=c(min(SMR2003ST$SMR03), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2003ST$SMR03)),include.lowest = T)
+SMR2004ST$SMR04cat <- cut(SMR2004ST$SMR04, breaks=c(min(SMR2004ST$SMR04), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2004ST$SMR04)),include.lowest = T)
+SMR2005ST$SMR05cat <- cut(SMR2005ST$SMR05, breaks=c(min(SMR2005ST$SMR05), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2005ST$SMR05)),include.lowest = T)
+SMR2006ST$SMR06cat <- cut(SMR2006ST$SMR06, breaks=c(min(SMR2006ST$SMR06), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2006ST$SMR06)),include.lowest = T)
+SMR2007ST$SMR07cat <- cut(SMR2007ST$SMR07, breaks=c(min(SMR2007ST$SMR07), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2007ST$SMR07)),include.lowest = T)
+SMR2008ST$SMR08cat <- cut(SMR2008ST$SMR08, breaks=c(min(SMR2008ST$SMR08), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2008ST$SMR08)),include.lowest = T)
+SMR2009ST$SMR09cat <- cut(SMR2009ST$SMR09, breaks=c(min(SMR2009ST$SMR09), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2009ST$SMR09)),include.lowest = T)
+SMR2010ST$SMR10cat <- cut(SMR2010ST$SMR10, breaks=c(min(SMR2010ST$SMR10), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 
+                  max(SMR2010ST$SMR10)),include.lowest = T)
+
+map_SMR_ST <- left_join(England, SMR2001ST, by = "code") %>%
+                left_join(.,SMR2002ST, by = "code") %>%
+                left_join(.,SMR2003ST, by = "code") %>%
+                left_join(.,SMR2004ST, by = "code") %>%
+                left_join(.,SMR2005ST, by = "code") %>%
+                left_join(.,SMR2006ST, by = "code") %>%
+                left_join(.,SMR2007ST, by = "code") %>%
+                left_join(.,SMR2008ST, by = "code") %>%
+                left_join(.,SMR2009ST, by = "code") %>%
+                left_join(.,SMR2010ST, by = "code")
+```
+
+```{r Data_map_PP_ST, eval=TRUE}
+PP2001ST <- data.frame(code = COPD_all[,1],
+                      PP01=modelCOPDST.sim$mean$PPsmr[,1])
+PP2002ST <- data.frame(code = COPD_all[,1],
+                      PP02=modelCOPDST.sim$mean$PPsmr[,2])
+PP2003ST <- data.frame(code = COPD_all[,1],
+                      PP03=modelCOPDST.sim$mean$PPsmr[,3])
+PP2004ST <- data.frame(code = COPD_all[,1],
+                      PP04=modelCOPDST.sim$mean$PPsmr[,4])
+PP2005ST <- data.frame(code = COPD_all[,1],
+                      PP05=modelCOPDST.sim$mean$PPsmr[,5])
+PP2006ST <- data.frame(code = COPD_all[,1],
+                      PP06=modelCOPDST.sim$mean$PPsmr[,6])
+PP2007ST <- data.frame(code = COPD_all[,1],
+                      PP07=modelCOPDST.sim$mean$PPsmr[,7])
+PP2008ST <- data.frame(code = COPD_all[,1],
+                      PP08=modelCOPDST.sim$mean$PPsmr[,8])
+PP2009ST <- data.frame(code = COPD_all[,1],
+                      PP09=modelCOPDST.sim$mean$PPsmr[,9])
+PP2010ST <- data.frame(code = COPD_all[,1],
+                      PP10=modelCOPDST.sim$mean$PPsmr[,10])
+
+PP2001ST$PP01cat <- cut(PP2001ST$PP01, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2002ST$PP02cat <- cut(PP2002ST$PP02, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2003ST$PP03cat <- cut(PP2003ST$PP03, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2004ST$PP04cat <- cut(PP2004ST$PP04, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2005ST$PP05cat <- cut(PP2005ST$PP05, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2006ST$PP06cat <- cut(PP2006ST$PP06, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2007ST$PP07cat <- cut(PP2007ST$PP07, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2008ST$PP08cat <- cut(PP2008ST$PP08, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2009ST$PP09cat <- cut(PP2009ST$PP09, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2010ST$PP10cat <- cut(PP2010ST$PP10, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+
+map_PP_ST <- left_join(England, PP2001ST, by = "code") %>%
+                left_join(.,PP2002ST, by = "code") %>%
+                left_join(.,PP2003ST, by = "code") %>%
+                left_join(.,PP2004ST, by = "code") %>%
+                left_join(.,PP2005ST, by = "code") %>%
+                left_join(.,PP2006ST, by = "code") %>%
+                left_join(.,PP2007ST, by = "code") %>%
+                left_join(.,PP2008ST, by = "code") %>%
+                left_join(.,PP2009ST, by = "code") %>%
+                left_join(.,PP2010ST, by = "code")
+```
+
+```{r Data_trendST, eval=TRUE}
+attach.bugs(modelCOPDST.sim) 
+
+# Preparing posterior estimates for the plot: 
+# median and 95% credible intervals of teporal residuals
+Median.tmST <- data.frame(apply(residSMRtm, 2, 
+                      quantile, probs=0.50)) # Post. median
+Low.tmST <- data.frame(apply(residSMRtm, 2, 
+                   quantile, probs=0.025)) # Lower bound
+Up.tmST <- data.frame(apply(residSMRtm, 2, 
+                  quantile, probs=0.975)) # Upper bound
+
+# combining posterior estimates in a data frame
+Year <- format(seq(as.Date("2001/01/01"), as.Date("2010/12/31"), 
+                   by = "year"), "%Y")
+
+Data.tm.plotST <- as.data.frame(cbind(Year, Median.tmST, 
+                                    Low.tmST, Up.tmST))
+
+colnames(Data.tm.plotST) <- c("Year","Post.median", "Low", "Up")
+```
+
+```{r DIC_ST, eval=TRUE}
+DIC_ST <- modelCOPDST.sim$DIC
+```
+
+```{r dataSTtmunstr, eval=TRUE}
+dataSTtmunstr <- list("N" = dim(England)[1], # nb of areas
+"T" = 10, # nb of years
+"O" = Observed, # observed nb of cases
+"E" = Expected, # expected nb of cases
+"adj" = nbWB$adj, "weights" = nbWB$weights, 
+"num" = nbWB$num)
+```
+
+```{r initSTtmunstr, eval=TRUE}
+initsSTtmunstr <- list(
+  list(alpha = 1, prec.u = 10, prec.v=10, prec.xi=8, prec.gamma=50,
+       U=c(rep(0.1,160),rep(0.2,1),rep(-0.1,162)), 
+       xi=c(0.1,0.1,0.1,0.1,0.1,-0.1,-0.1,-0.1,-0.1,-0.1),
+       gam=rep(0.01, times=10),
+       V=rep(0.01, times=323)), # chain 1
+  list(alpha = 1.5, prec.u = 5, prec.v=5, prec.xi=10, prec.gamma=10,
+       U=c(rep(0.5,160),rep(1,1),rep(-0.5,162)),
+       xi=c(0.2, 0, -0.2, 0, 0.2, 0, -0.2, 0, 0.1, -0.1),
+       gam=rep(-0.01, times=10),
+       V=rep(-0.01, times=323)) # chain 2
+  )
+```
+
+```{r parametersSTtmunstr, eval=TRUE}
+parametersSTtmunstr <- c("overallSMR", "SMR","residSMRsp", "PPsp", "sigma2.v",
+                  "sigma2.u", "U", "V", "xi","residSMRtm", "sigma2.xi",
+                  "PPsmr", "gam", "sigma2.gamma")
+```
+
+```{r MCMCsetSTtmunstr, eval=TRUE}
+ni <- 7000  # nb iterations 
+nt <- 5    # thinning interval
+nb <- 5000  # nb iterations as burn-in 
+nc <- 2     # nb chains
+```
+
+```{r MCMCSTtmunstr, eval=TRUE}
+t0STtmunstr <- Sys.time()
+modelCOPDSTtmunstr.sim <- bugs(data = dataSTtmunstr, parameters = parametersSTtmunstr, 
+                        inits = initsSTtmunstr, 
+                        model.file = "COPD_MODEL_ST_tmunstr.txt",
+                        n.chains = nc, n.iter = ni, n.burnin = nb, 
+                        n.thin = nt, debug = FALSE, 
+                        working.directory = getwd(), 
+                        codaPkg = FALSE, summary.only = FALSE, 
+                        bugs.seed = 9)
+t1STtmunstr <- Sys.time()
+```
+
+```{r MCMCtimeSTtmunstr, include=FALSE}
+t1STtmunstr - t0STtmunstr
+```
+
+```{r MCMCplotSTtmunstr, include=FALSE}
+mcmcplot(modelCOPDSTtmunstr.sim,random = 3)
+```
+
+```{r rHatSTtmunstr, include=FALSE}
+modelCOPDSTtmunstr.sim$summary[1,"Rhat"]
+range(modelCOPDSTtmunstr.sim$summary[2:3231,"Rhat"]) # example
+```
+
+```{r Data_map_resSMRsp_STtmunstr, eval=TRUE}
+resSMRsp_STtmunstr <- data.frame(code=COPD_all[,1],
+                    resSMR=modelCOPDSTtmunstr.sim$mean$residSMRsp)
+
+resSMRsp_STtmunstr$resSMRcat <- cut(resSMRsp_STtmunstr$resSMR, breaks=c(min(resSMRsp_STtmunstr$resSMR), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 
+                  max(resSMRsp_STtmunstr$resSMR)),include.lowest = T)
+
+map_resSMRsp_STtmunstr <- left_join(England, resSMRsp_STtmunstr, by = "code")
+```
+
+```{r Data_map_SMR_STunstr, eval=TRUE}
+SMR2001STtmunstr <- data.frame(code = COPD_all[,1],
+                      SMR01=modelCOPDSTtmunstr.sim$mean$SMR[,1])
+SMR2002STtmunstr <- data.frame(code = COPD_all[,1],
+                      SMR02=modelCOPDSTtmunstr.sim$mean$SMR[,2])
+SMR2003STtmunstr <- data.frame(code = COPD_all[,1],
+                      SMR03=modelCOPDSTtmunstr.sim$mean$SMR[,3])
+SMR2004STtmunstr <- data.frame(code = COPD_all[,1],
+                      SMR04=modelCOPDSTtmunstr.sim$mean$SMR[,4])
+SMR2005STtmunstr <- data.frame(code = COPD_all[,1],
+                      SMR05=modelCOPDSTtmunstr.sim$mean$SMR[,5])
+SMR2006STtmunstr <- data.frame(code = COPD_all[,1],
+                      SMR06=modelCOPDSTtmunstr.sim$mean$SMR[,6])
+SMR2007STtmunstr <- data.frame(code = COPD_all[,1],
+                      SMR07=modelCOPDSTtmunstr.sim$mean$SMR[,7])
+SMR2008STtmunstr <- data.frame(code = COPD_all[,1],
+                      SMR08=modelCOPDSTtmunstr.sim$mean$SMR[,8])
+SMR2009STtmunstr <- data.frame(code = COPD_all[,1],
+                      SMR09=modelCOPDSTtmunstr.sim$mean$SMR[,9])
+SMR2010STtmunstr <- data.frame(code = COPD_all[,1],
+                      SMR10=modelCOPDSTtmunstr.sim$mean$SMR[,10])
+
+SMR2001STtmunstr$SMR01cat <- cut(SMR2001STtmunstr$SMR01, breaks=c(min(SMR2001STtmunstr$SMR01), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2001STtmunstr$SMR01)),include.lowest = T)
+SMR2002STtmunstr$SMR02cat <- cut(SMR2002STtmunstr$SMR02, breaks=c(min(SMR2002STtmunstr$SMR02), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2002STtmunstr$SMR02)),include.lowest = T)
+SMR2003STtmunstr$SMR03cat <- cut(SMR2003STtmunstr$SMR03, breaks=c(min(SMR2003STtmunstr$SMR03), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2003STtmunstr$SMR03)),include.lowest = T)
+SMR2004STtmunstr$SMR04cat <- cut(SMR2004STtmunstr$SMR04, breaks=c(min(SMR2004STtmunstr$SMR04), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2004STtmunstr$SMR04)),include.lowest = T)
+SMR2005STtmunstr$SMR05cat <- cut(SMR2005STtmunstr$SMR05, breaks=c(min(SMR2005STtmunstr$SMR05), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2005STtmunstr$SMR05)),include.lowest = T)
+SMR2006STtmunstr$SMR06cat <- cut(SMR2006STtmunstr$SMR06, breaks=c(min(SMR2006STtmunstr$SMR06), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2006STtmunstr$SMR06)),include.lowest = T)
+SMR2007STtmunstr$SMR07cat <- cut(SMR2007STtmunstr$SMR07, breaks=c(min(SMR2007STtmunstr$SMR07), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2007STtmunstr$SMR07)),include.lowest = T)
+SMR2008STtmunstr$SMR08cat <- cut(SMR2008STtmunstr$SMR08, breaks=c(min(SMR2008STtmunstr$SMR08), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2008STtmunstr$SMR08)),include.lowest = T)
+SMR2009STtmunstr$SMR09cat <- cut(SMR2009STtmunstr$SMR09, breaks=c(min(SMR2009STtmunstr$SMR09), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2009STtmunstr$SMR09)),include.lowest = T)
+SMR2010STtmunstr$SMR10cat <- cut(SMR2010STtmunstr$SMR10, breaks=c(min(SMR2010STtmunstr$SMR10), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 
+                  max(SMR2010STtmunstr$SMR10)),include.lowest = T)
+
+map_SMR_STtmunstr <- left_join(England, SMR2001STtmunstr, by = "code") %>%
+                left_join(.,SMR2002STtmunstr, by = "code") %>%
+                left_join(.,SMR2003STtmunstr, by = "code") %>%
+                left_join(.,SMR2004STtmunstr, by = "code") %>%
+                left_join(.,SMR2005STtmunstr, by = "code") %>%
+                left_join(.,SMR2006STtmunstr, by = "code") %>%
+                left_join(.,SMR2007STtmunstr, by = "code") %>%
+                left_join(.,SMR2008STtmunstr, by = "code") %>%
+                left_join(.,SMR2009STtmunstr, by = "code") %>%
+                left_join(.,SMR2010STtmunstr, by = "code")
+```
+
+```{r Data_map_PP_STtmunstr, eval=TRUE}
+PP2001STtmunstr <- data.frame(code = COPD_all[,1],
+                      PP01=modelCOPDSTtmunstr.sim$mean$PPsmr[,1])
+PP2002STtmunstr <- data.frame(code = COPD_all[,1],
+                      PP02=modelCOPDSTtmunstr.sim$mean$PPsmr[,2])
+PP2003STtmunstr <- data.frame(code = COPD_all[,1],
+                      PP03=modelCOPDSTtmunstr.sim$mean$PPsmr[,3])
+PP2004STtmunstr <- data.frame(code = COPD_all[,1],
+                      PP04=modelCOPDSTtmunstr.sim$mean$PPsmr[,4])
+PP2005STtmunstr <- data.frame(code = COPD_all[,1],
+                      PP05=modelCOPDSTtmunstr.sim$mean$PPsmr[,5])
+PP2006STtmunstr <- data.frame(code = COPD_all[,1],
+                      PP06=modelCOPDSTtmunstr.sim$mean$PPsmr[,6])
+PP2007STtmunstr <- data.frame(code = COPD_all[,1],
+                      PP07=modelCOPDSTtmunstr.sim$mean$PPsmr[,7])
+PP2008STtmunstr <- data.frame(code = COPD_all[,1],
+                      PP08=modelCOPDSTtmunstr.sim$mean$PPsmr[,8])
+PP2009STtmunstr <- data.frame(code = COPD_all[,1],
+                      PP09=modelCOPDSTtmunstr.sim$mean$PPsmr[,9])
+PP2010STtmunstr <- data.frame(code = COPD_all[,1],
+                      PP10=modelCOPDSTtmunstr.sim$mean$PPsmr[,10])
+
+PP2001STtmunstr$PP01cat <- cut(PP2001STtmunstr$PP01, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2002STtmunstr$PP02cat <- cut(PP2002STtmunstr$PP02, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2003STtmunstr$PP03cat <- cut(PP2003STtmunstr$PP03, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2004STtmunstr$PP04cat <- cut(PP2004STtmunstr$PP04, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2005STtmunstr$PP05cat <- cut(PP2005STtmunstr$PP05, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2006STtmunstr$PP06cat <- cut(PP2006STtmunstr$PP06, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2007STtmunstr$PP07cat <- cut(PP2007STtmunstr$PP07, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2008STtmunstr$PP08cat <- cut(PP2008STtmunstr$PP08, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2009STtmunstr$PP09cat <- cut(PP2009STtmunstr$PP09, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2010STtmunstr$PP10cat <- cut(PP2010STtmunstr$PP10, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+
+map_PP_STtmunstr <- left_join(England, PP2001STtmunstr, by = "code") %>%
+                left_join(.,PP2002STtmunstr, by = "code") %>%
+                left_join(.,PP2003STtmunstr, by = "code") %>%
+                left_join(.,PP2004STtmunstr, by = "code") %>%
+                left_join(.,PP2005STtmunstr, by = "code") %>%
+                left_join(.,PP2006STtmunstr, by = "code") %>%
+                left_join(.,PP2007STtmunstr, by = "code") %>%
+                left_join(.,PP2008STtmunstr, by = "code") %>%
+                left_join(.,PP2009STtmunstr, by = "code") %>%
+                left_join(.,PP2010STtmunstr, by = "code")
+```
+
+```{r Data_trendSTtmunstr, eval=TRUE}
+attach.bugs(modelCOPDSTtmunstr.sim) 
+
+# Preparing posterior estimates for the plot: 
+# median and 95% credible intervals of teporal residuals
+Median.tmSTtmunstr <- data.frame(apply(residSMRtm, 2, 
+                      quantile, probs=0.50)) # Post. median
+Low.tmSTtmunstr <- data.frame(apply(residSMRtm, 2, 
+                   quantile, probs=0.025)) # Lower bound
+Up.tmSTtmunstr <- data.frame(apply(residSMRtm, 2, 
+                  quantile, probs=0.975)) # Upper bound
+
+# combining posterior estimates in a data frame
+Year <- format(seq(as.Date("2001/01/01"), as.Date("2010/12/31"), 
+                   by = "year"), "%Y")
+
+Data.tm.plotSTtmunstr <- as.data.frame(cbind(Year, Median.tmSTtmunstr, 
+                                    Low.tmSTtmunstr, Up.tmSTtmunstr))
+
+colnames(Data.tm.plotSTtmunstr) <- c("Year","Post.median", "Low", "Up")
+```
+
+```{r DIC_STtmunstr, eval=TRUE}
+DIC_STtmunstr <- modelCOPDSTtmunstr.sim$DIC
+```
+
+```{r dataSTint, eval=TRUE}
+dataSTint <- list("N" = dim(England)[1], # nb of areas
+"T" = 10, # nb of years
+"O" = Observed, # observed nb of cases
+"E" = Expected, # expected nb of cases
+"adj" = nbWB$adj, "weights" = nbWB$weights, 
+"num" = nbWB$num)
+```
+
+```{r initSTint, eval=TRUE}
+initsSTint <- list(
+  list(alpha = 1, prec.u = 10, prec.v=10, prec.xi=8, prec.nu=6,
+       U=c(rep(0.1,160),rep(0.2,1),rep(-0.1,162)), 
+       xi=c(0.1,0.1,0.1,0.1,0.1,-0.1,-0.1,-0.1,-0.1,-0.1),
+       nu=matrix(rep(0.2,3230), nrow=323, ncol=10),
+       V=rep(0.01, times=323)), # chain 1
+  list(alpha = 2, prec.u = 50, prec.v=50, prec.xi=10, prec.nu=10,
+       U=c(rep(0.5,160),rep(1,1),rep(-0.5,162)), 
+       xi=c(0.5, 0, 0.2, -0.5, -0.2, 0.5, 0, 0.2, -0.5, -0.2),
+       nu=matrix(rep(0.5,3230), nrow=323, ncol=10),
+       V=rep(0.05, times=323)) # chain 2
+  )
+```
+
+```{r parametersSTint, eval=TRUE}
+parametersSTint <- c("overallSMR", "SMR","residSMRsp", "PPsp", "sigma2.v",
+                  "sigma2.u", "U", "V", "xi","residSMRtm", "sigma2.xi", "sigma2.nu",
+                  "residSMRtmintonly", "residSMRtmint", "PPint", "PPsmr")
+```
+
+```{r MCMCsetSTint, eval=TRUE}
+ni <- 2500  # nb iterations 
+nt <- 5    # thinning interval
+nb <- 1000  # nb iterations as burn-in 
+nc <- 2     # nb chains
+```
+
+```{r MCMCSTint, eval=TRUE}
+t0STint <- Sys.time()
+modelCOPDSTint.sim <- bugs(data = dataSTint, parameters = parametersSTint, 
+                        inits = initsSTint, 
+                        model.file = "COPD_MODEL_ST_int.txt",
+                        n.chains = nc, n.iter = ni, n.burnin = nb, 
+                        n.thin = nt, debug = FALSE, 
+                        working.directory = getwd(), 
+                        codaPkg = FALSE, summary.only = FALSE, 
+                        bugs.seed = 9)
+t1STint <- Sys.time()
+```
+
+```{r MCMCtimeSTint, include=FALSE}
+t1STint - t0STint
+```
+
+```{r MCMCplotSTint, include=FALSE}
+mcmcplot(modelCOPDSTint.sim,random = 3)
+```
+
+```{r rHatSTint, include=FALSE}
+modelCOPDSTint.sim$summary[1,"Rhat"]
+range(modelCOPDSTint.sim$summary[2:3231,"Rhat"]) # example
+```
+
+```{r Data_map_resSMRsp_STint, eval=TRUE}
+resSMRsp_STint <- data.frame(code=COPD_all[,1],
+                    resSMRsp=modelCOPDSTint.sim$mean$residSMRsp)
+
+resSMRsp_STint$resSMRspcat <- cut(resSMRsp_STint$resSMRsp, breaks=c(min(resSMRsp_STint$resSMRsp), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 
+                  max(resSMRsp_STint$resSMRsp)),include.lowest = T)
+
+map_resSMRsp_STint <- left_join(England, resSMRsp_STint, by = "code")
+```
+
+```{r Data_mapSMR_STint, eval=TRUE}
+SMR2001STint <- data.frame(code = COPD_all[,1],
+                      SMR01=modelCOPDSTint.sim$mean$SMR[,1])
+SMR2002STint <- data.frame(code = COPD_all[,1],
+                      SMR02=modelCOPDSTint.sim$mean$SMR[,2])
+SMR2003STint <- data.frame(code = COPD_all[,1],
+                      SMR03=modelCOPDSTint.sim$mean$SMR[,3])
+SMR2004STint <- data.frame(code = COPD_all[,1],
+                      SMR04=modelCOPDSTint.sim$mean$SMR[,4])
+SMR2005STint <- data.frame(code = COPD_all[,1],
+                      SMR05=modelCOPDSTint.sim$mean$SMR[,5])
+SMR2006STint <- data.frame(code = COPD_all[,1],
+                      SMR06=modelCOPDSTint.sim$mean$SMR[,6])
+SMR2007STint <- data.frame(code = COPD_all[,1],
+                      SMR07=modelCOPDSTint.sim$mean$SMR[,7])
+SMR2008STint <- data.frame(code = COPD_all[,1],
+                      SMR08=modelCOPDSTint.sim$mean$SMR[,8])
+SMR2009STint <- data.frame(code = COPD_all[,1],
+                      SMR09=modelCOPDSTint.sim$mean$SMR[,9])
+SMR2010STint <- data.frame(code = COPD_all[,1],
+                      SMR10=modelCOPDSTint.sim$mean$SMR[,10])
+
+SMR2001STint$SMR01cat <- cut(SMR2001STint$SMR01, breaks=c(min(SMR2001STint$SMR01), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2001STint$SMR01)),include.lowest = T)
+SMR2002STint$SMR02cat <- cut(SMR2002STint$SMR02, breaks=c(min(SMR2002STint$SMR02), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2002STint$SMR02)),include.lowest = T)
+SMR2003STint$SMR03cat <- cut(SMR2003STint$SMR03, breaks=c(min(SMR2003STint$SMR03), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2003STint$SMR03)),include.lowest = T)
+SMR2004STint$SMR04cat <- cut(SMR2004STint$SMR04, breaks=c(min(SMR2004STint$SMR04), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2004STint$SMR04)),include.lowest = T)
+SMR2005STint$SMR05cat <- cut(SMR2005STint$SMR05, breaks=c(min(SMR2005STint$SMR05), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2005STint$SMR05)),include.lowest = T)
+SMR2006STint$SMR06cat <- cut(SMR2006STint$SMR06, breaks=c(min(SMR2006STint$SMR06), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2006STint$SMR06)),include.lowest = T)
+SMR2007STint$SMR07cat <- cut(SMR2007STint$SMR07, breaks=c(min(SMR2007STint$SMR07), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2007STint$SMR07)),include.lowest = T)
+SMR2008STint$SMR08cat <- cut(SMR2008STint$SMR08, breaks=c(min(SMR2008STint$SMR08), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2008STint$SMR08)),include.lowest = T)
+SMR2009STint$SMR09cat <- cut(SMR2009STint$SMR09, breaks=c(min(SMR2009STint$SMR09), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6,
+                  max(SMR2009STint$SMR09)),include.lowest = T)
+SMR2010STint$SMR10cat <- cut(SMR2010STint$SMR10, breaks=c(min(SMR2010STint$SMR10), 
+                  0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 
+                  max(SMR2010STint$SMR10)),include.lowest = T)
+
+map_SMR_STint <- left_join(England, SMR2001STint, by = "code") %>%
+                left_join(.,SMR2002STint, by = "code") %>%
+                left_join(.,SMR2003STint, by = "code") %>%
+                left_join(.,SMR2004STint, by = "code") %>%
+                left_join(.,SMR2005STint, by = "code") %>%
+                left_join(.,SMR2006STint, by = "code") %>%
+                left_join(.,SMR2007STint, by = "code") %>%
+                left_join(.,SMR2008STint, by = "code") %>%
+                left_join(.,SMR2009STint, by = "code") %>%
+                left_join(.,SMR2010STint, by = "code")
+```
+
+```{r Data_map_PP_STint, eval=TRUE}
+PP2001STint <- data.frame(code = COPD_all[,1],
+                      PP01=modelCOPDSTint.sim$mean$PPsmr[,1])
+PP2002STint <- data.frame(code = COPD_all[,1],
+                      PP02=modelCOPDSTint.sim$mean$PPsmr[,2])
+PP2003STint <- data.frame(code = COPD_all[,1],
+                      PP03=modelCOPDSTint.sim$mean$PPsmr[,3])
+PP2004STint <- data.frame(code = COPD_all[,1],
+                      PP04=modelCOPDSTint.sim$mean$PPsmr[,4])
+PP2005STint <- data.frame(code = COPD_all[,1],
+                      PP05=modelCOPDSTint.sim$mean$PPsmr[,5])
+PP2006STint <- data.frame(code = COPD_all[,1],
+                      PP06=modelCOPDSTint.sim$mean$PPsmr[,6])
+PP2007STint <- data.frame(code = COPD_all[,1],
+                      PP07=modelCOPDSTint.sim$mean$PPsmr[,7])
+PP2008STint <- data.frame(code = COPD_all[,1],
+                      PP08=modelCOPDSTint.sim$mean$PPsmr[,8])
+PP2009STint <- data.frame(code = COPD_all[,1],
+                      PP09=modelCOPDSTint.sim$mean$PPsmr[,9])
+PP2010STint <- data.frame(code = COPD_all[,1],
+                      PP10=modelCOPDSTint.sim$mean$PPsmr[,10])
+
+PP2001STint$PP01cat <- cut(PP2001STint$PP01, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2002STint$PP02cat <- cut(PP2002STint$PP02, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2003STint$PP03cat <- cut(PP2003STint$PP03, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2004STint$PP04cat <- cut(PP2004STint$PP04, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2005STint$PP05cat <- cut(PP2005STint$PP05, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2006STint$PP06cat <- cut(PP2006STint$PP06, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2007STint$PP07cat <- cut(PP2007STint$PP07, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2008STint$PP08cat <- cut(PP2008STint$PP08, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2009STint$PP09cat <- cut(PP2009STint$PP09, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PP2010STint$PP10cat <- cut(PP2010STint$PP10, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+
+map_PP_STint <- left_join(England, PP2001STint, by = "code") %>%
+                left_join(.,PP2002STint, by = "code") %>%
+                left_join(.,PP2003STint, by = "code") %>%
+                left_join(.,PP2004STint, by = "code") %>%
+                left_join(.,PP2005STint, by = "code") %>%
+                left_join(.,PP2006STint, by = "code") %>%
+                left_join(.,PP2007STint, by = "code") %>%
+                left_join(.,PP2008STint, by = "code") %>%
+                left_join(.,PP2009STint, by = "code") %>%
+                left_join(.,PP2010STint, by = "code")
+```
+
+```{r Data_map_PPint_STint, eval=TRUE}
+PPint2001STint <- data.frame(code = COPD_all[,1],
+                      PPint01=modelCOPDSTint.sim$mean$PPint[,1])
+PPint2002STint <- data.frame(code = COPD_all[,1],
+                      PPint02=modelCOPDSTint.sim$mean$PPint[,2])
+PPint2003STint <- data.frame(code = COPD_all[,1],
+                      PPint03=modelCOPDSTint.sim$mean$PPint[,3])
+PPint2004STint <- data.frame(code = COPD_all[,1],
+                      PPint04=modelCOPDSTint.sim$mean$PPint[,4])
+PPint2005STint <- data.frame(code = COPD_all[,1],
+                      PPint05=modelCOPDSTint.sim$mean$PPint[,5])
+PPint2006STint <- data.frame(code = COPD_all[,1],
+                      PPint06=modelCOPDSTint.sim$mean$PPint[,6])
+PPint2007STint <- data.frame(code = COPD_all[,1],
+                      PPint07=modelCOPDSTint.sim$mean$PPint[,7])
+PPint2008STint <- data.frame(code = COPD_all[,1],
+                      PPint08=modelCOPDSTint.sim$mean$PPint[,8])
+PPint2009STint <- data.frame(code = COPD_all[,1],
+                      PPint09=modelCOPDSTint.sim$mean$PPint[,9])
+PPint2010STint <- data.frame(code = COPD_all[,1],
+                      PPint10=modelCOPDSTint.sim$mean$PPint[,10])
+
+PPint2001STint$PPint01cat <- cut(PPint2001STint$PPint01, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PPint2002STint$PPint02cat <- cut(PPint2002STint$PPint02, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PPint2003STint$PPint03cat <- cut(PPint2003STint$PPint03, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PPint2004STint$PPint04cat <- cut(PPint2004STint$PPint04, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PPint2005STint$PPint05cat <- cut(PPint2005STint$PPint05, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PPint2006STint$PPint06cat <- cut(PPint2006STint$PPint06, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PPint2007STint$PPint07cat <- cut(PPint2007STint$PPint07, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PPint2008STint$PPint08cat <- cut(PPint2008STint$PPint08, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PPint2009STint$PPint09cat <- cut(PPint2009STint$PPint09, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+PPint2010STint$PPint10cat <- cut(PPint2010STint$PPint10, c(0, 0.2, 0.8, 1.00), include.lowest = T)
+
+map_PPint_STint <- left_join(England, PPint2001STint, by = "code") %>%
+                left_join(.,PPint2002STint, by = "code") %>%
+                left_join(.,PPint2003STint, by = "code") %>%
+                left_join(.,PPint2004STint, by = "code") %>%
+                left_join(.,PPint2005STint, by = "code") %>%
+                left_join(.,PPint2006STint, by = "code") %>%
+                left_join(.,PPint2007STint, by = "code") %>%
+                left_join(.,PPint2008STint, by = "code") %>%
+                left_join(.,PPint2009STint, by = "code") %>%
+                left_join(.,PPint2010STint, by = "code")
+
+map_PPint_STint_cutoff <- left_join(PPint2001STint, PPint2002STint, by = "code") %>%
+                left_join(.,PPint2003STint, by = "code") %>%
+                left_join(.,PPint2004STint, by = "code") %>%
+                left_join(.,PPint2005STint, by = "code") %>%
+                left_join(.,PPint2006STint, by = "code") %>%
+                left_join(.,PPint2007STint, by = "code") %>%
+                left_join(.,PPint2008STint, by = "code") %>%
+                left_join(.,PPint2009STint, by = "code") %>%
+                left_join(.,PPint2010STint, by = "code")
+
+for (i in 1:323){
+  map_PPint_STint_cutoff$flag08[i] <-
+    any(map_PPint_STint_cutoff[i,c(2,4,6,8,10,12,14,16,18,20)]>=0.8)
+}
+```
+
+```{r trendSTint, eval=TRUE}
+attach.bugs(modelCOPDSTint.sim) 
+
+# Preparing posterior estimates for the plot: 
+# median and 95% credible intervals of teporal residuals
+Median.tmSTint <- data.frame(apply(residSMRtm, 2, 
+                      quantile, probs=0.50)) # Post. median
+Low.tmSTint <- data.frame(apply(residSMRtm, 2, 
+                   quantile, probs=0.025)) # Lower bound
+Up.tmSTint <- data.frame(apply(residSMRtm, 2, 
+                  quantile, probs=0.975)) # Upper bound
+
+# combining posterior estimates in a data frame
+Year <- format(seq(as.Date("2001/01/01"), as.Date("2010/12/31"), 
+                   by = "year"), "%Y")
+
+Data.tm.plotSTint <- as.data.frame(cbind(Year, Median.tmSTint, 
+                                    Low.tmSTint, Up.tmSTint))
+
+colnames(Data.tm.plotSTint)<-c("Year","Post.median", "Low", "Up")
+
+# Prepare spaghetti plot - SMR
+Data.smr.plotSTint <- cbind(COPD_all[,1],as.data.frame(apply(SMR,c(2,3),mean)))
+colnames(Data.smr.plotSTint)<-c("code",2001:2010)
+Data.smr.plotSTint <- 
+  melt(Data.smr.plotSTint, measure.vars = c("2001","2002","2003","2004","2005",
+                                       "2006","2007","2008","2009","2010"),
+     variable_name = "year")
+colnames(Data.smr.plotSTint) <- c("code","Year","SMR")
+
+# Prepare spaghetti plot - TMint
+Data.tmint.plotSTint <- cbind(COPD_all[,1],as.data.frame(apply(residSMRtmint,c(2,3),mean)))
+colnames(Data.tmint.plotSTint)<-c("code",2001:2010)
+Data.tmint.plotSTint <- 
+  melt(Data.tmint.plotSTint, measure.vars = c("2001","2002","2003","2004","2005",
+                                       "2006","2007","2008","2009","2010"),
+     variable_name = "year")
+colnames(Data.tmint.plotSTint) <- c("code","Year","SMR")
+
+# Prepare spaghetti plot - TMintONLY
+Data.tmintonly.plotSTint <-
+  cbind(COPD_all[,1],as.data.frame(apply(residSMRtmintonly,c(2,3),mean)))
+colnames(Data.tmintonly.plotSTint)<-c("code",2001:2010)
+Data.tmintonly.plotSTint <- 
+  melt(Data.tmintonly.plotSTint, measure.vars = c("2001","2002","2003","2004","2005",
+                                       "2006","2007","2008","2009","2010"),
+     variable_name = "year")
+colnames(Data.tmintonly.plotSTint) <- c("code","Year","SMR")
+
+# Fetch flags
+RankSTint <- data.frame(Rank = rep(rank((Data.smr.plotSTint %>% filter(Year==2001))$SMR),10))
+Data.smr.plotSTint <- data.frame(Data.smr.plotSTint, RankSTint)
+
+Cutoff08STint <- data.frame(Cutoff08 = rep(map_PPint_STint_cutoff$flag08,10))
+Data.smr.plotSTint <- data.frame(Data.smr.plotSTint, Cutoff08STint)
+Data.tmint.plotSTint <- data.frame(Data.tmint.plotSTint, Cutoff08STint)
+Data.tmintonly.plotSTint <- data.frame(Data.tmintonly.plotSTint, Cutoff08STint)
+```
+
+```{r SmoothedRankingTable, eval=TRUE, echo=FALSE}
+Data.tmint.tableSTint <- cbind(COPD_all[,3],as.data.frame(apply(SMR,c(2,3),mean)))
+colnames(Data.tmint.tableSTint)<-c("name",2001:2010)
+
+smoothedRank2001 <- 
+  Data.tmint.tableSTint[order(Data.tmint.tableSTint$`2001`,
+                              decreasing = TRUE),c('name','2001')]
+colnames(smoothedRank2001) <- c('LUA2001', 'SMR2001')
+rownames(smoothedRank2001) <- NULL  
+smoothedRank2002 <- 
+  Data.tmint.tableSTint[order(Data.tmint.tableSTint$`2002`,
+                              decreasing = TRUE),c('name','2002')]
+colnames(smoothedRank2002) <- c('LUA2002', 'SMR2002')
+rownames(smoothedRank2002) <- NULL  
+smoothedRank2003 <- 
+  Data.tmint.tableSTint[order(Data.tmint.tableSTint$`2003`,
+                              decreasing = TRUE),c('name','2003')]
+colnames(smoothedRank2003) <- c('LUA2003', 'SMR2003')
+rownames(smoothedRank2003) <- NULL  
+smoothedRank2004 <- 
+  Data.tmint.tableSTint[order(Data.tmint.tableSTint$`2004`,
+                              decreasing = TRUE),c('name','2004')]
+colnames(smoothedRank2004) <- c('LUA2004', 'SMR2004')
+rownames(smoothedRank2004) <- NULL  
+smoothedRank2005 <- 
+  Data.tmint.tableSTint[order(Data.tmint.tableSTint$`2005`,
+                              decreasing = TRUE),c('name','2005')]
+colnames(smoothedRank2005) <- c('LUA2005', 'SMR2005')
+rownames(smoothedRank2005) <- NULL  
+smoothedRank2006 <- 
+  Data.tmint.tableSTint[order(Data.tmint.tableSTint$`2006`,
+                              decreasing = TRUE),c('name','2006')]
+colnames(smoothedRank2006) <- c('LUA2006', 'SMR2006')
+rownames(smoothedRank2006) <- NULL  
+smoothedRank2007 <- 
+  Data.tmint.tableSTint[order(Data.tmint.tableSTint$`2007`,
+                              decreasing = TRUE),c('name','2007')]
+colnames(smoothedRank2007) <- c('LUA2007', 'SMR2007')
+rownames(smoothedRank2007) <- NULL  
+smoothedRank2008 <- 
+  Data.tmint.tableSTint[order(Data.tmint.tableSTint$`2008`,
+                              decreasing = TRUE),c('name','2008')]
+colnames(smoothedRank2008) <- c('LUA2008', 'SMR2008')
+rownames(smoothedRank2008) <- NULL  
+smoothedRank2009 <- 
+  Data.tmint.tableSTint[order(Data.tmint.tableSTint$`2009`,
+                              decreasing = TRUE),c('name','2009')]
+colnames(smoothedRank2009) <- c('LUA2009', 'SMR2009')
+rownames(smoothedRank2009) <- NULL  
+smoothedRank2010 <- 
+  Data.tmint.tableSTint[order(Data.tmint.tableSTint$`2010`,
+                              decreasing = TRUE),c('name','2010')]
+colnames(smoothedRank2010) <- c('LUA2010', 'SMR2010')
+rownames(smoothedRank2010) <- NULL
+smoothedRankTable <- data.frame(data.frame(Rank = 1:323),smoothedRank2001,
+                                smoothedRank2002,smoothedRank2003,smoothedRank2004,
+                                smoothedRank2005,smoothedRank2006,smoothedRank2007,
+                                smoothedRank2008,smoothedRank2009,smoothedRank2010)
+#write.csv(smoothedRankTable, "smoothedRankTable.csv")
+
+smoothedRankTableRound <- smoothedRankTable
+for(i in 1:10){
+  smoothedRankTableRound[2*i + 1] <- round(smoothedRankTableRound[2*i +1],2)
+}
+```
+
+```{r DIC_STint, eval=TRUE}
+DIC_STint <- modelCOPDSTint.sim$DIC
+```
+
+```{r DIC_table, eval=TRUE}
+DIC_table <- data.frame(DIC_ST,DIC_STtmunstr,DIC_STint)
+rownames(DIC_table) <- c('DIC')
+colnames(DIC_table) <- c("Model2","Model3","Model4 (Final)")
+```
+
+# 3. Results
+
+In this section, we present the results of crude SMR calculation and one out of four models employed, which is spatio-temporal model with interaction (Model 4). The reasons for selecting this model are twofold. Firstly, this model yielded the lowest DIC out of the three models considering the temporal pattern (Table 1). A lower DIC value indicated that the model had a better balance of model fit and simplicity. Secondly, the space-time interaction allowed us to highlight areas with unusual temporal trend patterns. Because Model 3 did not present lower DIC than model 2, unstructured temporal pattern was thought to be negligible and was not included in the finally selected Model 4.
+
+Table 1: DIC of each model (Model 2; Spatio-temporal model without interaction nor unstructured temporal pattern, Model 3; Spatio-temporal model without interaction but with unstructured temporal pattern, Model 4; Spatio-temporal model with space-time interaction)
+```{r show_DIC_table, eval=TRUE}
+kable(DIC_table) %>%
+    kable_styling(bootstrap_options = "striped",
+    full_width = F, position = "center")
+```
+
+## 3-1. Crude SMRs
+
+Figure 1 shows the SMR summed by time (left) and areas (right). We can see hotspots in northern areas and a general downward trend over time but cannot distinguish areal and temporal patterns in these graphs.
+
+```{r crudeMap, eval=TRUE, fig.width=6, fig.height=3, fig.cap="Figure 1: (left) Crude SMR (2001 to 2010 in total), (right) Crude SMR trend"}
+crudeMapSMR <- ggplot() + geom_sf(data = map_SMR2001to2010) + aes(fill = SMR2001to2010cat) +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="crude SMR"))
+
+crudeTrendSMR <- ggplot(data = SMRtrend) + aes(x = year, y = SMR) +
+  geom_point() + geom_line() +
+  scale_x_continuous(breaks = c(2002,2004,2006,2008,2010)) +
+  theme_classic() + theme(aspect.ratio = 0.6)
+
+plot_grid(crudeMapSMR,crudeTrendSMR)
+```
+
+Figure 2 shows the map of SMR in each year during the study period. The general spatial pattern (high in northern ULAs) seems constant but it is difficult to distinguish usual and unusual trend. Figure 3 is a plot of crude SMR of each LUA over time. Again, it is difficult to assess which LUA follows a usual trend and which does an unusual one.
+
+```{r crudeMapByY, eval=TRUE, fig.width=8, fig.height=6, fig.cap="Figure 2: Crude SMR (2001 to 2010)"}
+SMR2001 <- ggplot() + geom_sf(data = map_SMR2001) + aes(fill = SMR2001cat) +
+  ggtitle('2001') +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="crude SMR")) +
+  theme(plot.title = element_text(size = 8),
+        legend.position="none",
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+SMR2002 <- ggplot() + geom_sf(data = map_SMR2002) + aes(fill = SMR2002cat) +
+  ggtitle('2002') +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="crude SMR")) +
+  theme(plot.title = element_text(size = 8),
+        legend.position="none",
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+SMR2003 <- ggplot() + geom_sf(data = map_SMR2003) + aes(fill = SMR2003cat) +
+  ggtitle('2003') +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="crude SMR")) +
+  theme(plot.title = element_text(size = 8),
+        legend.position="none",
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+SMR2004 <- ggplot() + geom_sf(data = map_SMR2004) + aes(fill = SMR2004cat) +
+  ggtitle('2004') +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="crude SMR")) +
+  theme(plot.title = element_text(size = 8),
+        legend.position="none",
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+SMR2005 <- ggplot() + geom_sf(data = map_SMR2005) + aes(fill = SMR2005cat) +
+  ggtitle('2005') +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="crude SMR")) +
+  theme(plot.title = element_text(size = 8),
+        legend.position="none",
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+SMR2006 <- ggplot() + geom_sf(data = map_SMR2006) + aes(fill = SMR2006cat) +
+  ggtitle('2006') +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="crude SMR")) +
+  theme(plot.title = element_text(size = 8),
+        legend.position="none",
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+SMR2007 <- ggplot() + geom_sf(data = map_SMR2007) + aes(fill = SMR2007cat) +
+  ggtitle('2007') +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="crude SMR")) +
+  theme(plot.title = element_text(size = 8),
+        legend.position="none",
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+SMR2008 <- ggplot() + geom_sf(data = map_SMR2008) + aes(fill = SMR2008cat) +
+  ggtitle('2008') +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="crude SMR")) +
+  theme(plot.title = element_text(size = 8),
+        legend.position="none",
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+SMR2009 <- ggplot() + geom_sf(data = map_SMR2009) + aes(fill = SMR2009cat) +
+  ggtitle('2009') +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="crude SMR")) +
+  theme(plot.title = element_text(size = 8),
+        legend.position="none",
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+SMR2010 <- ggplot() + geom_sf(data = map_SMR2010) + aes(fill = SMR2010cat) +
+  ggtitle('2010') +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="crude SMR")) +
+  theme(plot.title = element_text(size = 8),
+        legend.position="none",
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+
+SMRlegend <- ggplot() + geom_sf(data = map_SMRlegend) + aes(fill = SMRcat) +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="crude SMR")) +
+  theme(plot.title = element_text(size = 8),
+        legend.position=c(0.5,0.5),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+
+legend <- get_legend(SMRlegend)
+
+plot_grid(SMR2001,SMR2002,SMR2003,SMR2004,
+          SMR2005,SMR2006,SMR2007,SMR2008,
+          NULL,SMR2009,SMR2010,legend)
+```
+
+```{r PlotTimeCrude_smr, eval=TRUE, fig.width=4, fig.height=3, fig.cap="Figure 3: Crude SMRs; each line represents local unitary authority"}
+ggplot(Data.smr.plotCrude) +
+  aes(x=Year, y=SMR, group = code, color = 'red') +
+  geom_line(alpha=0.3) +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+Table 2 provides the change of top 5 LUAs of crude SMR over the 10 years. Although there are some common LUAs which appear in the table in different years such as Knowsley MCD, we also see some unusual changes over years. For example, in 2010 Corby CD was ranked top with an extremely high SMR but it was not ranked in top 5 in the previous year. Also, Knowsley MCD had an unnatural drop in 2007 compared with 2006 and 2008.
+
+Table 2: The top 5 LUAs in terms of crude SMR
+```{r show_crudeRankTable, eval=TRUE}
+kable(crudeRankTableRound[1:5,]) %>%
+    kable_styling(bootstrap_options = "striped",
+    full_width = F, position = "center")
+```
+
+## 3-2. Spatio-temporal model with space-time interaction
+
+Figure 4 shows the residual SMRs (spatial component; $e^{V_i + U_i}$) considering spatio-temporal pattern including space-time interaction over the 10 years in total. There are clusters with high SMRs in northern areas.
+
+```{r map_resSMRsp_STint, eval=TRUE, fig.width=4, fig.height=3, fig.cap="Figure 4: Smoothed SMR (spatial component)"}
+# Spatio-temporal model: Map posterior mean of the residual RRs
+ggplot() + geom_sf(data = map_resSMRsp_STint) + aes(fill = resSMRspcat) +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="Residual SMR"))
+```
+
+Figure 5 provides the posterior means of smoothed SMRs considering spatio-temporal pattern ($e^{\alpha + V_{i} + U_{i} + \xi_{t} + \nu_{it}}$) over the 10 years (yearly). Appendix Figure 12 provides the posterior probability that the smoothed SMR > 1.
+
+```{r mapSMR_STyearint, eval=TRUE, fig.width=8, fig.height=6, fig.cap="Figure 5: Smoothed SMRs (2001 to 2010)"}
+map_SMR2001STint <- ggplot() + geom_sf(data = map_SMR_STint) + aes(fill = SMR01cat) +
+    ggtitle('2001') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2002STint <- ggplot() + geom_sf(data = map_SMR_STint) + aes(fill = SMR02cat) +
+    ggtitle('2002') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2003STint <- ggplot() + geom_sf(data = map_SMR_STint) + aes(fill = SMR03cat) +
+    ggtitle('2003') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2004STint <- ggplot() + geom_sf(data = map_SMR_STint) + aes(fill = SMR04cat) +
+    ggtitle('2004') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2005STint <- ggplot() + geom_sf(data = map_SMR_STint) + aes(fill = SMR05cat) +
+    ggtitle('2005') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2006STint <- ggplot() + geom_sf(data = map_SMR_STint) + aes(fill = SMR06cat) +
+    ggtitle('2006') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2007STint <- ggplot() + geom_sf(data = map_SMR_STint) + aes(fill = SMR07cat) +
+    ggtitle('2007') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2008STint <- ggplot() + geom_sf(data = map_SMR_STint) + aes(fill = SMR08cat) +
+    ggtitle('2008') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2009STint <- ggplot() + geom_sf(data = map_SMR_STint) + aes(fill = SMR09cat) +
+    ggtitle('2009') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2010STint <- ggplot() + geom_sf(data = map_SMR_STint) + aes(fill = SMR10cat) +
+    ggtitle('2010') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+
+SMRlegend2 <- ggplot() + geom_sf(data = map_SMRlegend) + aes(fill = SMRcat) +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="smoothed SMR")) +
+  theme(plot.title = element_text(size = 8),
+        legend.position=c(0.5,0.5),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+
+legend2 <- get_legend(SMRlegend2)
+
+plot_grid(map_SMR2001STint,map_SMR2002STint,map_SMR2003STint,map_SMR2004STint,
+          map_SMR2005STint,map_SMR2006STint,map_SMR2007STint,map_SMR2008STint,
+          NULL,map_SMR2009STint,map_SMR2010STint,legend2)
+```
+
+Figure 6 is a plot of smoothed SMR of each LUA over 10 years. Blue lines represent LUAs with unusual temporal trends (defined by the probability that $\nu_{it}$ > 1 is over 0.8 at least one time point). There were 67 such LUAs. Interestingly, the LUA with highest SMR constantly over 10 years was coloured by red, meaning that this LUA followed a usual temporal trend.
+
+```{r PlotTimeSTint_smr, eval=TRUE, fig.width=4, fig.height=3, fig.cap="Figure 6: Posterior means of smoothed SMRs; each line represents unitary authority (blue lines = unusual temporal trend and red lines = usual temporal trend)"}
+ggplot(Data.smr.plotSTint) +
+  aes(x=Year, y=SMR, group = code) +
+  geom_line(alpha=0.3, aes(col=Cutoff08)) +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+Table 3 provides the change of top 5 LUAs of smoothed SMR over the 10 years. Although there were changes in these top 5 areas, Knowsley MCD was constantly ranked number one. Comapared with Table 2, the LUAs listed in Table 3 were more stable.
+
+Thus, Knowsley would appear to be the area with the highest risk, with Liverpool MCD the second. It is worth noting that St Helens MCD was ranked 3rd in 2001 but disappeared from the top 5 table since 2004, finally becoming 13th in 2010. The bottom five areas were combinations of Christchurch CD, East Devon CD, Rutland UA, Suffolk Coastal CD, Chiltern CD, and East Dorset CD (bottom table not shown). When observing this list, we found that none of the bottom five areas experienced an SMR of below 0.5.
+
+
+Table 3: The top 5 LUAs in terms of smoothed SMR
+```{r show_smoothedRankTable, eval=TRUE}
+kable(smoothedRankTableRound[1:5,]) %>%
+    kable_styling(bootstrap_options = "striped",
+    full_width = F, position = "center")
+```
+
+Figure 7 shows the posterior median and 95% credible interval of temporal trends (SMR explained by temporal components) including effect from interaction. It can be seen that there was an overall downward trend with local peaks in 2003, 2005, and 2008.
+
+```{r PlotTimeSTint, eval=TRUE, fig.width=4, fig.height=3, fig.cap="Figure 7: Posterior median of the temporal trends; dashed lines mark 95% credible intervals"}
+
+# plot the posterior median with the 95% credible intervals
+plot(Year, Data.tm.plotSTint$Post.median, xlab="Year", las=1, 
+     ylab="Temporal component", cex=1, col="red", type="l",
+     pch=1, ylim=c(0.9, 1.1))
+points(Year, Data.tm.plotSTint$Low, type="l", 
+       col="darkgreen", lwd=1.5, lty=2)
+points(Year, Data.tm.plotSTint$Up, type="l", 
+       col="darkgreen", lwd=1.5, lty=2)
+```
+
+Figure 8 shows the temporal components (left: main effect + interaction, right: interaction only) of each LUA. The colouring is the same as Figure 6. The presence of blue lines indicates there are LUAs with unusual temporal trends. The residual SMR explained by interaction term was up to 1.08.
+
+```{r PlotTimeSTint_tmint, eval=TRUE, fig.width=8, fig.height=3, fig.cap="Figure 8: Posterior means of the temporal trends; each line represents unitary authority (blue lines = unusual temporal trend and red lines = usual temporal trend)"}
+
+tmSTint <- ggplot(Data.tmint.plotSTint) +
+  aes(x=Year, y=SMR, group = code) +
+  ylab("Temporal component") +
+  geom_line(alpha=0.3, aes(col=Cutoff08)) +
+  theme_classic() +
+  theme(legend.position = "none")
+tmintSTint <- ggplot(Data.tmintonly.plotSTint) +
+  aes(x=Year, y=SMR, group = code) +
+  ylab("Space-time interaction") +
+  geom_line(alpha=0.3, aes(col=Cutoff08)) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+plot_grid(tmSTint, tmintSTint)
+```
+
+# Discussion and conclusion
+
+This section should synthetically discuss your answer to the research question and possibly how your findings compare or contrast with previous results. You can refer to the potential implications and future perspectives and/or application of present work.
+
+
+
+# Appendix
+
+## Models used in this project
+
+### Spatial model (Model 1)
+
+```{r eval=FALSE, echo=TRUE}
+#Project Group 2 COPD in England: A spatial model
+#Model with the BYM convolution prior on the random effects
+
+model
+{
+  for (i in 1 : N) {
+      O[i]  ~ dpois(mu[i])
+      log(mu[i]) <- log(E[i]) + alpha + U[i] +V[i]
+      V[i] ~ dnorm(0, prec.v)             #  the unstructured random effects
+      SMR[i] <- exp(alpha + U[i] + V[i])  #  relative risk
+      residSMR[i] <- exp(U[i] + V[i])     #  the residual SMR
+      PP[i] <- step(residSMR[i]-1)        #  posterior probability that residSMR is greater than 1
+  }
+
+ 
+# intrinsic CAR prior on spatial random effects U_i
+  
+  U[1:N] ~ car.normal(adj[],weights[],num[],prec.u)
+
+
+# priors
+  alpha ~ dflat()                      # improper uniform (-infty, +infty) prior 
+   
+  prec.u ~ dgamma(0.5,0.005)           # prior on precison of spatial area random effects
+  sigma2.u <- 1/prec.u                 # conditional variance of spatial area random effects
+  
+  prec.v ~ dgamma(1,0.001)             # prior on precison of unstructured area random effects
+  sigma2.v <- 1/prec.v                 # conditional variance of unstructured area random effects
+
+# other quantity of interest
+  overallSMR <- exp(alpha)              # overall SMR across study region over the 10-year period
+  
+}
+```
+
+### Spatio-temporal model without interaction or unstructured temporal trend (Model 2)
+
+```{r eval=FALSE, echo=TRUE}
+#A space-time model
+#Separable space-time model with no interactions
+
+model
+{
+  for (i in 1 : N) {
+       for (t in 1:T) {
+          O[i,t]  ~ dpois(mu[i,t])
+          log(mu[i,t]) <- log(E[i,t]) + alpha + U[i] +V[i] + xi[t]
+          SMR[i,t] <- exp(alpha + V[i] + U[i]+ xi[t])
+          PPsmr[i,t] <- step(SMR[i,t]-1)
+      }
+      V[i] ~ dnorm(0,prec.v)            #  the unstructured random effects 
+      residSMRsp[i] <- exp(U[i] + V[i])    #  the spatial residual SMR
+      PPsp[i] <- step(residSMRsp[i]-1)       #  posterior probability
+  }
+
+# intrinsic CAR prior on spatial random effects
+  U[1:N] ~ car.normal(adj[], weights[], num[], prec.u)
+
+
+# intrinsic CAR prior on temporal random effects
+  xi[1:T] ~ car.normal(adj.tm[], weights.tm[], num.tm[], prec.xi)
+ 
+   # Weight matrix and adjacency matrix corresponding to RW(1) prior
+    
+    for(t in 1:1) {		
+  		weights.tm[t] <- 1;          adj.tm[t] <- t+1;     num.tm[t] <- 1
+    }
+	for(t in 2:(T-1)) {
+          weights.tm[2+(t-2)*2] <- 1;      adj.tm[2+(t-2)*2] <- t-1
+  		weights.tm[3+(t-2)*2] <- 1;       adj.tm[3+(t-2)*2] <- t+1;      num.tm[t] <- 2
+    }
+    for(t in T:T) {		
+  		weights.tm[(T-2)*2 + 2] <- 1;      adj.tm[(T-2)*2 + 2] <- t-1;    num.tm[t] <- 1
+    }
+
+
+# priors:
+  alpha  ~ dflat()                     # improper uniform (-infty, +infty) prior 
+   
+  prec.u ~ dgamma(0.5,0.005)	       # prior on precison of spatial area random effects
+  sigma2.u <- 1/prec.u                 # conditional variance of spatial area random effects
+  prec.v ~ dgamma(1, 0.001)            # prior on precison of unstructured area random effects
+  sigma2.v <- 1/prec.v                 # conditional variance of unstructured area random effects
+  prec.xi ~ dgamma(0.5, 0.005)         # prior on precison of temporal random effects
+  sigma2.xi <- 1/prec.xi               # conditional variance of temporal random effects
+
+# other quantities of interest
+  overallSMR <- exp(alpha)                          # overall SMR across study region over the 10-year period
+																									#risks due to spatial effects   
+  for (t in 1:T) {	
+      residSMRtm[t] <- exp(xi[t])   #  the temporal residual SMR
+  }
+}
+```
+
+### Spatio-temporal model without interaction but with unstructured temporal trend (Model 3)
+
+```{r eval=FALSE, echo=TRUE}
+#A space-time model
+#Separable space-time model with no interactions but with unstructured temporal trend
+
+model
+{
+  for (i in 1 : N) {
+       for (t in 1:T) {
+          O[i,t]  ~ dpois(mu[i,t])
+          log(mu[i,t]) <- log(E[i,t]) + alpha + U[i] +V[i] + xi[t] + gam[t]
+          SMR[i,t] <- exp(alpha + V[i] + U[i]+ xi[t] + gam[t])
+          PPsmr[i,t] <- step(SMR[i,t]-1)
+      }
+      V[i] ~ dnorm(0,prec.v)            #  the unstructured random effects 
+      residSMRsp[i] <- exp(U[i] + V[i])    #  the spatial residual SMR
+      PPsp[i] <- step(residSMRsp[i]-1)       #  posterior probability
+  }
+
+# intrinsic CAR prior on spatial random effects
+  U[1:N] ~ car.normal(adj[], weights[], num[], prec.u)
+
+
+# intrinsic CAR prior on temporal random effects
+  xi[1:T] ~ car.normal(adj.tm[], weights.tm[], num.tm[], prec.xi)
+ 
+   # Weight matrix and adjacency matrix corresponding to RW(1) prior
+    
+    for(t in 1:1) {		
+  		weights.tm[t] <- 1;          adj.tm[t] <- t+1;     num.tm[t] <- 1
+    }
+	for(t in 2:(T-1)) {
+          weights.tm[2+(t-2)*2] <- 1;      adj.tm[2+(t-2)*2] <- t-1
+  		weights.tm[3+(t-2)*2] <- 1;       adj.tm[3+(t-2)*2] <- t+1;      num.tm[t] <- 2
+    }
+    for(t in T:T) {		
+  		weights.tm[(T-2)*2 + 2] <- 1;      adj.tm[(T-2)*2 + 2] <- t-1;    num.tm[t] <- 1
+    }
+
+for (t in 1:T){
+  gam[t] ~ dnorm(0,prec.gamma)
+}
+
+# priors:
+  alpha  ~ dflat()                     # improper uniform (-infty, +infty) prior 
+   
+  prec.u ~ dgamma(0.5,0.005)	       # prior on precison of spatial area random effects
+  sigma2.u <- 1/prec.u                 # conditional variance of spatial area random effects
+  prec.v ~ dgamma(1, 0.001)            # prior on precison of unstructured area random effects
+  sigma2.v <- 1/prec.v                 # conditional variance of unstructured area random effects
+  prec.xi ~ dgamma(0.5, 0.005)         # prior on precison of temporal random effects
+  sigma2.xi <- 1/prec.xi               # conditional variance of temporal random effects
+  prec.gamma ~ dgamma(0.5, 0.005)      # prior on precison of temporal unstructured random effects
+  sigma2.gamma <- 1/prec.gamma         # conditional variance of temporal unstructured random effects
+
+
+# other quantities of interest
+  overallSMR <- exp(alpha)                          # overall SMR across study region over the 10-year period
+																									#risks due to spatial effects   
+  for (t in 1:T) {	
+      residSMRtm[t] <- exp(xi[t] + gam[t])   #  the temporal residual SMR
+  }
+}
+```
+
+### Spatio-temporal model with interaction (Model 4 - finally selected model)
+
+```{r eval=FALSE, echo=TRUE}
+#A space-time model
+#Separable space-time model with interactions
+
+model
+{
+  for (i in 1:N) {
+       for (t in 1:T) {
+          O[i,t]  ~ dpois(mu[i,t])
+          log(mu[i,t]) <- log(E[i,t]) + alpha + U[i] + V[i] + xi[t] + nu[i,t]
+          nu[i,t] ~ dnorm(0, prec.nu)    #space-time interactions
+          SMR[i,t] <- exp(alpha + V[i] + U[i] + xi[t] + nu[i,t])
+          PPsmr[i,t] <- step(SMR[i,t]-1)
+      }
+      V[i] ~ dnorm(0,prec.v)            #  the unstructured random effects 
+      residSMRsp[i] <- exp(U[i] + V[i])    #  the spatial residual SMR
+      PPsp[i] <- step(residSMRsp[i]-1)       #  posterior probability
+  }
+
+# intrinsic CAR prior on spatial random effects
+  U[1:N] ~ car.normal(adj[], weights[], num[], prec.u)
+
+
+# intrinsic CAR prior on temporal random effects
+  xi[1:T] ~ car.normal(adj.tm[], weights.tm[], num.tm[], prec.xi)
+ 
+   # Weight matrix and adjacency matrix corresponding to RW(1) prior
+    
+    for(t in 1:1) {		
+  		weights.tm[t] <- 1;          adj.tm[t] <- t+1;     num.tm[t] <- 1
+    }
+	for(t in 2:(T-1)) {
+          weights.tm[2+(t-2)*2] <- 1;      adj.tm[2+(t-2)*2] <- t-1
+  		weights.tm[3+(t-2)*2] <- 1;       adj.tm[3+(t-2)*2] <- t+1;      num.tm[t] <- 2
+    }
+    for(t in T:T) {		
+  		weights.tm[(T-2)*2 + 2] <- 1;      adj.tm[(T-2)*2 + 2] <- t-1;    num.tm[t] <- 1
+    }
+
+
+# priors:
+  alpha  ~ dflat()                     # improper uniform (-infty, +infty) prior 
+   
+  prec.u ~ dgamma(0.5,0.005)	       # prior on precison of spatial area random effects
+  sigma2.u <- 1/prec.u                 # conditional variance of spatial area random effects
+  prec.v ~ dgamma(1, 0.001)            # prior on precison of unstructured area random effects
+  sigma2.v <- 1/prec.v                 # conditional variance of unstructured area random effects
+  prec.xi ~ dgamma(0.5, 0.005)         # prior on precison of temporal random effects
+  sigma2.xi <- 1/prec.xi               # conditional variance of temporal random effects
+  prec.nu ~ dgamma(0.5, 0.0005)
+  sigma2.nu <- 1/prec.nu               # variance of space-time interactions
+
+# other quantities of interest
+  overallSMR <- exp(alpha)                          # overall SMR across study region over the 10-year period
+																									#risks due to spatial effects   
+  for (t in 1:T) {	
+      residSMRtm[t] <- exp(xi[t])   #  the temporal residual SMR
+  }
+
+  for (i in 1:N) {
+       for (t in 1:T) {
+          residSMRtmintonly[i,t] <- exp(nu[i,t])
+          residSMRtmint[i,t] <- exp(xi[t] + nu[i,t])
+          PPint[i,t] <- step(residSMRtmintonly[i,t]-1)
+      }
+  }
+
+}
+```
+
+## Results not shown in the main text
+
+### Spatial Model (Model 1)
+
+```{r mapStotal, eval=TRUE, fig.cap="Appendix Figure 1: residual SMR (2001 to 2010 in total)"}
+# The spatial pattern considered SMR over the 10 years in total (not shown).
+ggplot() + geom_sf(data = map_SMR_PP_S) + aes(fill = resSMRcat) +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="residual SMR"))
+```
+
+```{r mapPPS, eval=TRUE, fig.cap="Appendix Figure 2: Posterior probability that the residual SMRs are > 1"}
+# The spatial pattern considered posterior probability that SMR > 1 over the 10 years in total (not shown).
+ggplot() + geom_sf(data = map_SMR_PP_S) + aes(fill = PPcat) +
+  theme_bw() +
+  scale_fill_viridis(
+    option = "plasma",
+    name = "Posterior Probability",
+    discrete = T,
+    direction = -1,
+    guide = guide_legend(
+      title.position = 'top',
+      reverse = T
+    ))
+
+```
+
+### Spatio-temporal model without sapce-time interaction (Model 2)
+
+```{r map_resSMRsp_ST, eval=TRUE, fig.cap="Appendix Figure 3: Residual SMR (spatial component)"}
+# Spatio-temporal model: Map posterior mean of the residual RRs
+ggplot() + geom_sf(data = map_resSMRsp_ST) + aes(fill = resSMRcat) +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="Residual SMR"))
+```
+
+```{r mapSMR_STyear, eval=TRUE, fig.width=8, fig.height=6, fig.cap="Appendix Figure 4: smoothed SMR (2001 to 2010)"}
+map_SMR2001ST <- ggplot() + geom_sf(data = map_SMR_ST) + aes(fill = SMR01cat) +
+    ggtitle('2001') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2002ST <- ggplot() + geom_sf(data = map_SMR_ST) + aes(fill = SMR02cat) +
+    ggtitle('2002') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2003ST <- ggplot() + geom_sf(data = map_SMR_ST) + aes(fill = SMR03cat) +
+    ggtitle('2003') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2004ST <- ggplot() + geom_sf(data = map_SMR_ST) + aes(fill = SMR04cat) +
+    ggtitle('2004') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2005ST <- ggplot() + geom_sf(data = map_SMR_ST) + aes(fill = SMR05cat) +
+    ggtitle('2005') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2006ST <- ggplot() + geom_sf(data = map_SMR_ST) + aes(fill = SMR06cat) +
+    ggtitle('2006') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2007ST <- ggplot() + geom_sf(data = map_SMR_ST) + aes(fill = SMR07cat) +
+    ggtitle('2007') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2008ST <- ggplot() + geom_sf(data = map_SMR_ST) + aes(fill = SMR08cat) +
+    ggtitle('2008') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2009ST <- ggplot() + geom_sf(data = map_SMR_ST) + aes(fill = SMR09cat) +
+    ggtitle('2009') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2010ST <- ggplot() + geom_sf(data = map_SMR_ST) + aes(fill = SMR10cat) +
+    ggtitle('2010') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+
+plot_grid(map_SMR2001ST,map_SMR2002ST,map_SMR2003ST,map_SMR2004ST,
+          map_SMR2005ST,map_SMR2006ST,map_SMR2007ST,map_SMR2008ST,
+          NULL,map_SMR2009ST,map_SMR2010ST,legend2)
+```
+
+```{r mapPP_STyear, eval=TRUE, fig.width=8, fig.height=6, fig.cap="Appendix Figure 5: Posteriot probability of SMR > 1 (2001 to 2010)"}
+map_PP2001ST <- ggplot() + geom_sf(data = map_PP_ST) + aes(fill = PP01cat) +
+    ggtitle('2001') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2002ST <- ggplot() + geom_sf(data = map_PP_ST) + aes(fill = PP02cat) +
+    ggtitle('2002') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2003ST <- ggplot() + geom_sf(data = map_PP_ST) + aes(fill = PP03cat) +
+    ggtitle('2003') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2004ST <- ggplot() + geom_sf(data = map_PP_ST) + aes(fill = PP04cat) +
+    ggtitle('2004') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2005ST <- ggplot() + geom_sf(data = map_PP_ST) + aes(fill = PP05cat) +
+    ggtitle('2005') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2006ST <- ggplot() + geom_sf(data = map_PP_ST) + aes(fill = PP06cat) +
+    ggtitle('2006') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2007ST <- ggplot() + geom_sf(data = map_PP_ST) + aes(fill = PP07cat) +
+    ggtitle('2007') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2008ST <- ggplot() + geom_sf(data = map_PP_ST) + aes(fill = PP08cat) +
+    ggtitle('2008') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2009ST <- ggplot() + geom_sf(data = map_PP_ST) + aes(fill = PP09cat) +
+    ggtitle('2009') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2010ST <- ggplot() + geom_sf(data = map_PP_ST) + aes(fill = PP10cat) +
+    ggtitle('2010') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+
+PPlegend <- ggplot() + geom_sf(data = map_PP_ST) + aes(fill = PP01cat) +
+    theme_bw() +
+    scale_fill_viridis(option = "plasma",name = "Posterior Probability",
+                       discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position=c(0.5,0.5),
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+
+legendPP <- get_legend(PPlegend)
+
+plot_grid(map_PP2001ST,map_PP2002ST,map_PP2003ST,map_PP2004ST,
+          map_PP2005ST,map_PP2006ST,map_PP2007ST,map_PP2008ST,
+          NULL,map_PP2009ST,map_PP2010ST,legendPP)
+```
+
+```{r PlotTime_ST, eval=TRUE, fig.width=4, fig.height=3, fig.cap="Appendix Figure 6: Posterior median of the temporal trends; dashed lines mark 95% credible intervals"}
+
+# plot the posterior median with the 95% credible intervals
+plot(Year, Data.tm.plotST$Post.median, xlab="Year", las=1, 
+     ylab="", cex=1, col="red", type="l",
+     pch=1, ylim=c(0.9, 1.15))
+points(Year, Data.tm.plotST$Low, type="l", 
+       col="darkgreen", lwd=1.5, lty=2)
+points(Year, Data.tm.plotST$Up, type="l", 
+       col="darkgreen", lwd=1.5, lty=2)
+```
+
+### Spatio-temporal model without sapce-time interaction but with unstructured temporal variation (Model 3)
+
+```{r map_resSMRsp_STtmunstr, eval=TRUE, fig.cap="Appendix Figure 7: Residual SMR (spatial component)"}
+ggplot() + geom_sf(data = map_resSMRsp_STtmunstr) + aes(fill = resSMRcat) +
+  theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+  guides(fill=guide_legend(title="Residual SMR"))
+```
+
+```{r mapSMR_STtmunstryear, eval=TRUE, fig.width=8, fig.height=6, fig.cap="Appendix Figure 8: smoothed SMR (2001 to 2010)"}
+map_SMR2001STtmunstr <- ggplot() + geom_sf(data = map_SMR_STtmunstr) + aes(fill = SMR01cat) +
+    ggtitle('2001') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2002STtmunstr <- ggplot() + geom_sf(data = map_SMR_STtmunstr) + aes(fill = SMR02cat) +
+    ggtitle('2002') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2003STtmunstr <- ggplot() + geom_sf(data = map_SMR_STtmunstr) + aes(fill = SMR03cat) +
+    ggtitle('2003') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2004STtmunstr <- ggplot() + geom_sf(data = map_SMR_STtmunstr) + aes(fill = SMR04cat) +
+    ggtitle('2004') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2005STtmunstr <- ggplot() + geom_sf(data = map_SMR_STtmunstr) + aes(fill = SMR05cat) +
+    ggtitle('2005') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2006STtmunstr <- ggplot() + geom_sf(data = map_SMR_STtmunstr) + aes(fill = SMR06cat) +
+    ggtitle('2006') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2007STtmunstr <- ggplot() + geom_sf(data = map_SMR_STtmunstr) + aes(fill = SMR07cat) +
+    ggtitle('2007') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2008STtmunstr <- ggplot() + geom_sf(data = map_SMR_STtmunstr) + aes(fill = SMR08cat) +
+    ggtitle('2008') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2009STtmunstr <- ggplot() + geom_sf(data = map_SMR_STtmunstr) + aes(fill = SMR09cat) +
+    ggtitle('2009') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_SMR2010STtmunstr <- ggplot() + geom_sf(data = map_SMR_STtmunstr) + aes(fill = SMR10cat) +
+    ggtitle('2010') +
+    theme_bw() + scale_fill_brewer(palette = "PuOr", direction = -1) + 
+    guides(fill=guide_legend(title="SMR")) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+
+plot_grid(map_SMR2001STtmunstr,map_SMR2002STtmunstr,map_SMR2003STtmunstr,map_SMR2004STtmunstr,
+          map_SMR2005STtmunstr,map_SMR2006STtmunstr,map_SMR2007STtmunstr,map_SMR2008STtmunstr,
+          NULL,map_SMR2009ST,map_SMR2010STtmunstr,legend2)
+```
+
+```{r mapPP_STtmunstryear, eval=TRUE, fig.width=8, fig.height=6, fig.cap="Appendix Figure 9: Posteriot probability of SMR > 1 (2001 to 2010)"}
+map_PP2001STtmunstr <- ggplot() + geom_sf(data = map_PP_STtmunstr) + aes(fill = PP01cat) +
+    ggtitle('2001') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2002STtmunstr <- ggplot() + geom_sf(data = map_PP_STtmunstr) + aes(fill = PP02cat) +
+    ggtitle('2002') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2003STtmunstr <- ggplot() + geom_sf(data = map_PP_STtmunstr) + aes(fill = PP03cat) +
+    ggtitle('2003') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2004STtmunstr <- ggplot() + geom_sf(data = map_PP_STtmunstr) + aes(fill = PP04cat) +
+    ggtitle('2004') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2005STtmunstr <- ggplot() + geom_sf(data = map_PP_STtmunstr) + aes(fill = PP05cat) +
+    ggtitle('2005') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2006STtmunstr <- ggplot() + geom_sf(data = map_PP_STtmunstr) + aes(fill = PP06cat) +
+    ggtitle('2006') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2007STtmunstr <- ggplot() + geom_sf(data = map_PP_STtmunstr) + aes(fill = PP07cat) +
+    ggtitle('2007') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2008STtmunstr <- ggplot() + geom_sf(data = map_PP_STtmunstr) + aes(fill = PP08cat) +
+    ggtitle('2008') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2009STtmunstr <- ggplot() + geom_sf(data = map_PP_STtmunstr) + aes(fill = PP09cat) +
+    ggtitle('2009') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2010STtmunstr <- ggplot() + geom_sf(data = map_PP_STtmunstr) + aes(fill = PP10cat) +
+    ggtitle('2010') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+
+plot_grid(map_PP2001STtmunstr,map_PP2002STtmunstr,map_PP2003STtmunstr,map_PP2004STtmunstr,
+          map_PP2005STtmunstr,map_PP2006STtmunstr,map_PP2007STtmunstr,map_PP2008STtmunstr,
+          NULL,map_PP2009STtmunstr,map_PP2010STtmunstr,legendPP)
+```
+
+```{r PlotTime_STtmunstr, eval=TRUE, fig.width=4, fig.height=3, fig.cap="Appendix Figure 10: Posterior median of the temporal trends; dashed lines mark 95% credible intervals"}
+
+# plot the posterior median with the 95% credible intervals
+plot(Year, Data.tm.plotSTtmunstr$Post.median, xlab="Year", las=1, 
+     ylab="", cex=1, col="red", type="l",
+     pch=1, ylim=c(0.9, 1.15))
+points(Year, Data.tm.plotSTtmunstr$Low, type="l", 
+       col="darkgreen", lwd=1.5, lty=2)
+points(Year, Data.tm.plotSTtmunstr$Up, type="l", 
+       col="darkgreen", lwd=1.5, lty=2)
+```
+
+```{r PlotTime_STtmunstr_diff, eval=TRUE, fig.width=4, fig.height=3, fig.cap="Appendix Figure 11: Difference in posterior median of the temporal trends between models with and without unstructured temporal pattern"}
+
+plot(Year, (Data.tm.plotSTtmunstr$Post.median - Data.tm.plotST$Post.median),
+     xlab="Year", las=1, 
+     ylab="", cex=1, col="red", type="l",
+     pch=1, ylim=c(-0.05, 0.05))
+```
+
+### Spatio-temporal model with sapce-time interaction but with unstructured temporal variation (Model 4)
+
+* The posterior probabilities that SMR > 1 considering spatio-temporal pattern with interaction of are and time over the 10 years (yearly) is below.
+
+```{r mapPP_STintyear, eval=TRUE, fig.width=8, fig.height=6, fig.cap="Appendix Figure 12: Posteriot probability of SMR > 1 (2001 to 2010)"}
+map_PP2001STint <- ggplot() + geom_sf(data = map_PP_STint) + aes(fill = PP01cat) +
+    ggtitle('2001') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2002STint <- ggplot() + geom_sf(data = map_PP_STint) + aes(fill = PP02cat) +
+    ggtitle('2002') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2003STint <- ggplot() + geom_sf(data = map_PP_STint) + aes(fill = PP03cat) +
+    ggtitle('2003') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2004STint <- ggplot() + geom_sf(data = map_PP_STint) + aes(fill = PP04cat) +
+    ggtitle('2004') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2005STint <- ggplot() + geom_sf(data = map_PP_STint) + aes(fill = PP05cat) +
+    ggtitle('2005') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2006STint <- ggplot() + geom_sf(data = map_PP_STint) + aes(fill = PP06cat) +
+    ggtitle('2006') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2007STint <- ggplot() + geom_sf(data = map_PP_STint) + aes(fill = PP07cat) +
+    ggtitle('2007') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2008STint <- ggplot() + geom_sf(data = map_PP_STint) + aes(fill = PP08cat) +
+    ggtitle('2008') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2009STint <- ggplot() + geom_sf(data = map_PP_STint) + aes(fill = PP09cat) +
+    ggtitle('2009') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+map_PP2010STint <- ggplot() + geom_sf(data = map_PP_STint) + aes(fill = PP10cat) +
+    ggtitle('2010') + theme_bw() +
+    scale_fill_viridis(option = "plasma",discrete = T,direction = -1,
+                       guide = guide_legend(title.position = 'top',
+                                            reverse = T)) +
+    theme(plot.title = element_text(size = 8),
+          legend.position="none",
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
+
+plot_grid(map_PP2001STint,map_PP2002STint,map_PP2003STint,map_PP2004STint,
+          map_PP2005STint,map_PP2006STint,map_PP2007STint,map_PP2008STint,
+          NULL,map_PP2009STint,map_PP2010STint,legendPP)
+```
+
+# References
+
